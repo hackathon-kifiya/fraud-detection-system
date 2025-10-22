@@ -1,0 +1,11 @@
+package rules;
+
+import com.frauddetection.domain.LoanRequest;
+
+rule "High loan amount"
+when
+    $l: LoanRequest( amountRequested > 50000 )
+then
+    $l.addViolation("LOAN_HIGH_AMOUNT", 20, "Loan amount exceeds threshold");
+end
+

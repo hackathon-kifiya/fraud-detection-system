@@ -19,14 +19,16 @@ import (
 type DetectionHandler struct {
 	db         *db.DB
 	engineURL  string
+	statsURL   string
 	httpClient *http.Client
 }
 
 // NewDetectionHandler creates a new detection handler
-func NewDetectionHandler(database *db.DB, engineURL string) *DetectionHandler {
+func NewDetectionHandler(database *db.DB, engineURL string, statsURL string) *DetectionHandler {
 	return &DetectionHandler{
 		db:        database,
 		engineURL: engineURL,
+		statsURL:  statsURL,
 		httpClient: &http.Client{
 			Timeout: 5 * time.Minute, // Detection can take time
 		},
@@ -62,8 +64,11 @@ func (h *DetectionHandler) TriggerDetection(c *gin.Context) {
 		return
 	}
 
+	// Check if stats service is available (non-fatal if down)
+	statsHealthy := h.checkStatsHealth() == nil
+
 	// Call the fraud detection engine
-	result, err := h.callDetectionEngine(request.DaysBack)
+	engineResult, err := h.callDetectionEngine(request.DaysBack)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.DetectionResponse{
 			Success: false,
@@ -72,10 +77,25 @@ func (h *DetectionHandler) TriggerDetection(c *gin.Context) {
 		return
 	}
 
+	// Optionally call the stats service
+	var statsResult map[string]interface{}
+	if statsHealthy {
+		if sr, sErr := h.callStatsService(request.DaysBack); sErr == nil {
+			statsResult = sr
+		}
+	}
+
+	combined := map[string]interface{}{
+		"engine": engineResult,
+	}
+	if statsResult != nil {
+		combined["stats"] = statsResult
+	}
+
 	c.JSON(http.StatusOK, models.DetectionResponse{
 		Success: true,
 		Message: fmt.Sprintf("Fraud detection completed for last %d days", request.DaysBack),
-		Result:  result,
+		Result:  combined,
 	})
 }
 
@@ -89,6 +109,8 @@ func (h *DetectionHandler) GetDetectionStatus(c *gin.Context) {
 
 	// Check engine health
 	engineHealthy := h.checkEngineHealth() == nil
+	// Check stats health
+	statsHealthy := h.checkStatsHealth() == nil
 
 	// Get recent detection stats
 	stats, err := h.getDetectionStats(ctx)
@@ -102,11 +124,12 @@ func (h *DetectionHandler) GetDetectionStatus(c *gin.Context) {
 	status := gin.H{
 		"database_healthy": dbHealthy,
 		"engine_healthy":   engineHealthy,
+		"stats_healthy":    statsHealthy,
 		"overall_status":   "healthy",
 		"stats":            stats,
 	}
 
-	if !dbHealthy || !engineHealthy {
+	if !dbHealthy || !engineHealthy || !statsHealthy {
 		status["overall_status"] = "degraded"
 	}
 
@@ -131,6 +154,32 @@ func (h *DetectionHandler) checkEngineHealth() error {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("engine health check failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// checkStatsHealth checks if the stats service is available
+func (h *DetectionHandler) checkStatsHealth() error {
+	if h.statsURL == "" {
+		return fmt.Errorf("stats URL not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", h.statsURL+"/health", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create stats health request: %w", err)
+	}
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call stats health endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("stats health check failed with status: %d", resp.StatusCode)
 	}
 
 	return nil
@@ -194,6 +243,52 @@ func (h *DetectionHandler) callDetectionEngine(daysBack int) (map[string]interfa
 	}
 
 	return response.Result, nil
+}
+
+// callStatsService calls the python statistical analysis service
+func (h *DetectionHandler) callStatsService(daysBack int) (map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	if h.statsURL == "" {
+		return nil, fmt.Errorf("stats URL not configured")
+	}
+
+	requestBody := map[string]interface{}{
+		"days_back": daysBack,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal stats request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", h.statsURL+"/analyze", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stats request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call stats service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read stats response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("stats service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse stats response: %w", err)
+	}
+
+	return response, nil
 }
 
 // getDetectionStats gets recent detection statistics from the database
@@ -272,16 +367,16 @@ func (h *DetectionHandler) getDetectionStats(ctx context.Context) (map[string]in
 // TriggerDetectionByType triggers fraud detection for a specific data type
 func (h *DetectionHandler) TriggerDetectionByType(c *gin.Context) {
 	dataType := c.Param("type")
-	
+
 	// Validate data type
 	validTypes := map[string]bool{
 		"transactions":   true,
 		"loan_requests":  true,
 		"credit_history": true,
-		"kyc":           true,
-		"repayments":    true,
+		"kyc":            true,
+		"repayments":     true,
 	}
-	
+
 	if !validTypes[dataType] {
 		c.JSON(http.StatusBadRequest, models.DetectionResponse{
 			Success: false,

@@ -22,12 +22,18 @@ func main() {
 	// Get engine URL from environment
 	engineURL := os.Getenv("ENGINE_URL")
 	if engineURL == "" {
-		engineURL = "http://engine:5001"
+		engineURL = "http://java-engine:8081/api"
+	}
+
+	// Get stats URL from environment
+	statsURL := os.Getenv("PYTHON_STATS_URL")
+	if statsURL == "" {
+		statsURL = "http://python-stats:5001"
 	}
 
 	// Initialize handlers
 	uploadHandler := handlers.NewUploadHandler(database)
-	detectionHandler := handlers.NewDetectionHandler(database, engineURL)
+	detectionHandler := handlers.NewDetectionHandler(database, engineURL, statsURL)
 	flaggedHandler := handlers.NewFlaggedHandler(database)
 
 	// Set Gin mode
@@ -85,6 +91,7 @@ func main() {
 
 	log.Printf("Starting Fraud Detection Backend on port %s", port)
 	log.Printf("Engine URL: %s", engineURL)
+	log.Printf("Stats URL: %s", statsURL)
 
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

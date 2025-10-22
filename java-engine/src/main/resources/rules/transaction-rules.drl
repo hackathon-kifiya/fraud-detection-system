@@ -1,0 +1,18 @@
+package rules;
+
+import com.frauddetection.domain.Transaction;
+
+rule "High amount vs balance"
+when
+    $t: Transaction( amount > accountBalance * 2 )
+then
+    $t.addViolation("TXN_HIGH_VS_BAL", 20, "Transaction amount exceeds 2x account balance");
+end
+
+rule "Nighttime activity"
+when
+    $t: Transaction( timestamp.getEpochSecond() % 86400 < 5 * 3600 || timestamp.getEpochSecond() % 86400 > 23 * 3600 )
+then
+    $t.addViolation("TXN_NIGHT", 10, "Transaction during nighttime window");
+end
+

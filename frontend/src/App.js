@@ -16,6 +16,7 @@ import {
   IconButton,
   Avatar,
   Badge,
+  Collapse,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -29,16 +30,38 @@ import {
   Report as ReportIcon,
   Settings as SettingsIcon,
   Group as GroupIcon,
+  AccountBalance as TransactionsIcon,
+  CreditCard as LoanRequestsIcon,
+  Assessment as CreditHistoryIcon,
+  Person as KycIcon,
+  Payment as RepaymentsIcon,
+  ExpandLess,
+  ExpandMore,
+  Pets as DogIcon,
+  Science as SandboxIcon,
+  PlayArrow as EvaluationIcon,
+  DataObject as DataSynthesisIcon,
+  Add as AddIcon,
+  Storage as StorageIcon,
+  Speed as SpeedIcon,
 } from '@mui/icons-material';
-import UploadPage from './components/UploadPage';
 import Dashboard from './components/Dashboard';
-import { healthAPI } from './services/api';
+import TransactionsPage from './components/TransactionsPage';
+import LoanRequestsPage from './components/LoanRequestsPage';
+import CreditHistoryPage from './components/CreditHistoryPage';
+import KycPage from './components/KycPage';
+import RepaymentsPage from './components/RepaymentsPage';
+import SandboxPage from './components/SandboxPage';
+import DataSynthesisPage from './components/DataSynthesisPage';
+import SettingsPage from './components/SettingsPage';
 
 const drawerWidth = 280;
 
 function App() {
-  const [healthStatus, setHealthStatus] = useState('checking');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [openMenus, setOpenMenus] = useState({
+    fraudDetection: true,
+  });
 
   const showSnackbar = (message, severity = 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -46,6 +69,13 @@ function App() {
 
   const handleSnackbarClose = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  const toggleMenu = (menu) => {
+    setOpenMenus(prev => ({
+      ...prev,
+      [menu]: !prev[menu]
+    }));
   };
 
   return (
@@ -60,21 +90,29 @@ function App() {
             '& .MuiDrawer-paper': {
               width: drawerWidth,
               boxSizing: 'border-box',
-              bgcolor: '#424242',
+              bgcolor: '#023737',
               color: 'white',
             },
           }}
         >
           <Box sx={{ p: 3, borderBottom: '1px solid #616161' }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'white' }}>
-              Fraud Detection
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'flex-end', mb: 1 }}>
+              <img 
+                src="/logo.svg" 
+                alt="MAX Logo" 
+                style={{ width: 40, height: 40, marginRight: 8 }}
+              />
+              <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'white' }}>
+                MAX
+              </Typography>
+            </Box>
             <Typography variant="body2" sx={{ color: '#bdbdbd' }}>
-              Security System
+              Fraud Detection System
             </Typography>
           </Box>
           
           <Box sx={{ flexGrow: 1, pt: 2 }}>
+            {/* Overview Section */}
             <Box sx={{ mb: 3 }}>
               <Typography 
                 variant="caption" 
@@ -92,6 +130,8 @@ function App() {
               <List sx={{ px: 1 }}>
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                   <ListItemButton
+                    component="a"
+                    href="/dashboard"
                     sx={{
                       borderRadius: 1,
                       mx: 1,
@@ -115,7 +155,256 @@ function App() {
                 </ListItem>
               </List>
             </Box>
-          </Box>
+
+            {/* Fraud Detection Types Section */}
+            <Box sx={{ mb: 3 }}>
+              <ListItemButton
+                onClick={() => toggleMenu('fraudDetection')}
+                sx={{
+                  borderRadius: 1,
+                  mx: 1,
+                  mb: 1,
+                  '&:hover': { bgcolor: '#616161' },
+                }}
+              >
+                <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                  <SecurityIcon />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Fraud Detection" 
+                  sx={{ 
+                    color: 'white',
+                    '& .MuiListItemText-primary': {
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold'
+                    }
+                  }} 
+                />
+                {openMenus.fraudDetection ? <ExpandLess /> : <ExpandMore />}
+              </ListItemButton>
+              
+              <Collapse in={openMenus.fraudDetection} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding sx={{ px: 1 }}>
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      component="a"
+                      href="/transactions"
+                      sx={{
+                        borderRadius: 1,
+                        ml: 2,
+                        '&:hover': { bgcolor: '#616161' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                        <TransactionsIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Transactions" 
+                        sx={{ 
+                          color: 'white',
+                          '& .MuiListItemText-primary': {
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                          }
+                        }} 
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                  
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      component="a"
+                      href="/loan-requests"
+                      sx={{
+                        borderRadius: 1,
+                        ml: 2,
+                        '&:hover': { bgcolor: '#616161' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                        <LoanRequestsIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Loan Requests" 
+                        sx={{ 
+                          color: 'white',
+                          '& .MuiListItemText-primary': {
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                          }
+                        }} 
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                  
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      component="a"
+                      href="/credit-history"
+                      sx={{
+                        borderRadius: 1,
+                        ml: 2,
+                        '&:hover': { bgcolor: '#616161' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                        <CreditHistoryIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Credit History" 
+                        sx={{ 
+                          color: 'white',
+                          '& .MuiListItemText-primary': {
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                          }
+                        }} 
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                  
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      component="a"
+                      href="/kyc"
+                      sx={{
+                        borderRadius: 1,
+                        ml: 2,
+                        '&:hover': { bgcolor: '#616161' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                        <KycIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="KYC Data" 
+                        sx={{ 
+                          color: 'white',
+                          '& .MuiListItemText-primary': {
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                          }
+                        }} 
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                  
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      component="a"
+                      href="/repayments"
+                      sx={{
+                        borderRadius: 1,
+                        ml: 2,
+                        '&:hover': { bgcolor: '#616161' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                        <RepaymentsIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Repayments" 
+                        sx={{ 
+                          color: 'white',
+                          '& .MuiListItemText-primary': {
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                          }
+                        }} 
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                </List>
+          </Collapse>
+        </Box>
+
+        {/* Sandbox Section */}
+        <Box sx={{ mb: 3 }}>
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              component="a"
+              href="/sandbox"
+              sx={{
+                borderRadius: 1,
+                mx: 1,
+                '&:hover': { bgcolor: '#616161' },
+              }}
+            >
+              <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                <SandboxIcon />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Sandbox" 
+                sx={{ 
+                  color: 'white',
+                  '& .MuiListItemText-primary': {
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold'
+                  }
+                }} 
+              />
+            </ListItemButton>
+          </ListItem>
+        </Box>
+
+        {/* Data Synthesis Section */}
+        <Box sx={{ mb: 3 }}>
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              component="a"
+              href="/data-synthesis"
+              sx={{
+                borderRadius: 1,
+                mx: 1,
+                '&:hover': { bgcolor: '#616161' },
+              }}
+            >
+              <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                <DataSynthesisIcon />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Data Synthesis" 
+                sx={{ 
+                  color: 'white',
+                  '& .MuiListItemText-primary': {
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold'
+                  }
+                }} 
+              />
+            </ListItemButton>
+          </ListItem>
+        </Box>
+
+        {/* Settings Section */}
+        <Box sx={{ mb: 3 }}>
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              component="a"
+              href="/settings"
+              sx={{
+                borderRadius: 1,
+                mx: 1,
+                '&:hover': { bgcolor: '#616161' },
+              }}
+            >
+              <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                <SettingsIcon />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Settings" 
+                sx={{ 
+                  color: 'white',
+                  '& .MuiListItemText-primary': {
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold'
+                  }
+                }} 
+              />
+            </ListItemButton>
+          </ListItem>
+        </Box>
+      </Box>
         </Drawer>
 
         {/* Main Content */}
@@ -131,13 +420,17 @@ function App() {
             }}
           >
             <Toolbar sx={{ justifyContent: 'space-between' }}>
-              <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold' }}>
-                Fraud Detection System
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Status: {healthStatus === 'healthy' ? '🟢' : '🔴'} {healthStatus}
+              <Box sx={{ display: 'flex', alignItems: 'flex-end' }}>
+                <img 
+                  src="/logo.svg" 
+                  alt="MAX Logo" 
+                  style={{ width: 36, height: 36, marginRight: 6 }}
+                />
+                <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold' }}>
+                  MAX
                 </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <IconButton color="inherit">
                   <Badge badgeContent={0} color="error">
                     <NotificationsIcon sx={{ color: 'black' }} />
@@ -155,17 +448,45 @@ function App() {
 
           {/* Page Content */}
           <Box sx={{ flexGrow: 1, p: 3 }}>
-            <Routes>
-              <Route path="/" element={<Navigate to="/upload" replace />} />
-              <Route 
-                path="/upload" 
-                element={<UploadPage onShowSnackbar={showSnackbar} />} 
-              />
-              <Route 
-                path="/dashboard" 
-                element={<Dashboard onShowSnackbar={showSnackbar} />} 
-              />
-            </Routes>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route 
+            path="/dashboard" 
+            element={<Dashboard onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/transactions" 
+            element={<TransactionsPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/loan-requests" 
+            element={<LoanRequestsPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/credit-history" 
+            element={<CreditHistoryPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/kyc" 
+            element={<KycPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/repayments" 
+            element={<RepaymentsPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/sandbox" 
+            element={<SandboxPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/data-synthesis" 
+            element={<DataSynthesisPage onShowSnackbar={showSnackbar} />} 
+          />
+          <Route 
+            path="/settings" 
+            element={<SettingsPage onShowSnackbar={showSnackbar} />} 
+          />
+        </Routes>
           </Box>
         </Box>
 

@@ -1,0 +1,6 @@
+<kmodule xmlns="http://www.drools.org/xsd/kmodule">
+  <kbase name="fraudKBase" packages="rules">
+    <ksession name="fraudKSession" type="stateless"/>
+  </kbase>
+</kmodule>
+
