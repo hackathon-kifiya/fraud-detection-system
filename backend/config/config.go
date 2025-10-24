@@ -6,4 +6,5 @@ type Config struct {
 	BaseUrl                string
 	FrontendUrl            string
 	CoreDBConnectionString string
+	MigrationFileLocation  string
 }
