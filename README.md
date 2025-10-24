@@ -1,42 +1,60 @@
-# Fraud Detection MVP
-
-A fraud detection system for embedded finance.
+MAX - A fraud detection system for embedded finance.
 
 ## Architecture
+
+```
+                                ┌─────────────────┐
+                                │     frontend    │
+                                └────────┬────────┘
+                                         |
+                                         ↓
+                                ┌─────────────────┐
+                                │     backend     │
+                                └────────┬────────┘
+                                         |           
+                                         ↓
+         ┌────────────────────┬────────────────────┬────────────────────┐
+         ↓                    ↓                    ↓                    ↓
+┌─────────────────┐  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   rule engine   │  │   descriptive   │ │   predictive    │ │ risk aggreagtion│ 
+│                 │  │analytics engine │ │analytics engine │ │    engine       │
+└─────────────────┘  └─────────────────┘ └─────────────────┘ └─────────────────┘
+
+
+```
+## Data flow
 
 ```
 +--------------------+
                      
         ┌───────────────────────────────────────┐
-        │               Fronend                 │
-        └───────────────┬───────────────────────┘
-                        │
-                        │
-                        ↓
+        │            Ingestion                  │
+        └─────────────────┬─────────────────────┘
+                          │
+                          │
+                          ↓
         ┌───────────────────────────────────────┐
         │           BACKEND                     │
         │  - Orchestration (Workflows)          │
         │  - User Management (Auth)             │
         │  - Input/Ingestion                    │
         │  - Input Sanitization                 │
-        └───────────────┬───────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-        ↓               ↓               ↓
-┌───────────────┐ ┌───────────┐ ┌──────────────┐
-│ RULE ENGINE   │ │ ML MODEL  │ │   ANOMALY    │
-│               │ │           │ │  DETECTION   │
-│ Deterministic │ │ XGBoost/NN│ │              │
-│ - Blacklist   │ │ - Features│ │ Unsupervised │
-│ - Velocity    │ │ - Scoring │ │ - Isolation  │
-│ - Geo checks  │ │           │ │ - Autoencoder│
-│               │ │           │ │              │
-│ ~50ms         │ │ ~200ms    │ │ ~150ms       │
-└───────┬───────┘ └─────┬─────┘ └──────┬───────┘
-        │               │               │
-        └───────────────┼───────────────┘
-                        ↓
+        └─────────────────┬─────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ↓               ↓               ↓
+┌───────────────┐   ┌───────────┐ ┌──────────────┐
+│ RULE ENGINE   │   │ ML MODEL  │ │   ANOMALY    │
+│               │   │           │ │  DETECTION   │
+│ Deterministic │   │ XGBoost/NN│ │              │
+│ - Blacklist   |   | - Features| | Unsupervised |
+| - Velocity    |   | - Scoring | | - Isolation  |
+|               │   │           │ │ - Autoencoder|
+└───────┬───────┘   └─────┬─────┘ └──────┬───────┘
+        │                 │              │
+        └─────────────────┼──────────────┘
+                          ↓
         ┌───────────────────────────────────────┐
         │   RISK AGGREGATION ENGINE             │
         │                                       │
@@ -68,3 +86,14 @@ A fraud detection system for embedded finance.
 ## Use cases
 
 https://docs.google.com/spreadsheets/d/1YFAoreEE3M_yJxrjLkx92qoIPFh0YinAQshdZ5iMICQ/edit?usp=sharing
+
+
+## components
+
+
+## v2
+
+- Model driven risk aggrigation engine
+
+Use a second machine learning model (a "meta-learner" or "stacking model") that takes the three engine scores (ScoreR​,ScoreML​,ScoreDA​) as its input features and outputs the final risk score. This allows for a non-linear combination of the scores.
+
