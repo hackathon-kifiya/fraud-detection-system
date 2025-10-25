@@ -7,10 +7,16 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class DroolsConfig {
+    
     @Bean
     public KieContainer kieContainer() {
         KieServices ks = KieServices.Factory.get();
         return ks.getKieClasspathContainer();
+    }
+    
+    @Bean
+    public KieServices kieServices() {
+        return KieServices.Factory.get();
     }
 }
 
