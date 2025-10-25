@@ -18,16 +18,22 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
+      console.log('AuthContext: Initializing auth, token:', !!token);
       if (token) {
         try {
+          console.log('AuthContext: Getting profile...');
           const response = await authAPI.getProfile();
+          console.log('AuthContext: Profile response:', response.data);
           setUser(response.data);
         } catch (error) {
           console.error('Auth initialization failed:', error);
           localStorage.removeItem('token');
           setToken(null);
         }
+      } else {
+        console.log('AuthContext: No token, skipping profile fetch');
       }
+      console.log('AuthContext: Setting loading to false');
       setLoading(false);
     };
 

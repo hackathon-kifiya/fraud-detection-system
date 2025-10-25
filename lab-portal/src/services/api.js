@@ -60,3 +60,4 @@ export const labAPI = {
 };
 
 export default api;
+
