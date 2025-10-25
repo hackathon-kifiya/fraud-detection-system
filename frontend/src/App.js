@@ -38,9 +38,7 @@ import {
   ExpandLess,
   ExpandMore,
   Pets as DogIcon,
-  Science as SandboxIcon,
   PlayArrow as EvaluationIcon,
-  DataObject as DataSynthesisIcon,
   Add as AddIcon,
   Storage as StorageIcon,
   Speed as SpeedIcon,
@@ -51,8 +49,6 @@ import LoanRequestsPage from './components/LoanRequestsPage';
 import CreditHistoryPage from './components/CreditHistoryPage';
 import KycPage from './components/KycPage';
 import RepaymentsPage from './components/RepaymentsPage';
-import SandboxPage from './components/SandboxPage';
-import DataSynthesisPage from './components/DataSynthesisPage';
 import SettingsPage from './components/SettingsPage';
 import LoginPage from './components/LoginPage';
 import UserManagementPage from './components/UserManagementPage';
@@ -326,63 +322,6 @@ function AppContent() {
           </Collapse>
         </Box>
 
-        {/* Sandbox Section */}
-        <Box sx={{ mb: 3 }}>
-          <ListItem disablePadding sx={{ mb: 0.5 }}>
-            <ListItemButton
-              component="a"
-              href="/sandbox"
-              sx={{
-                borderRadius: 1,
-                mx: 1,
-                '&:hover': { bgcolor: '#616161' },
-              }}
-            >
-              <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
-                <SandboxIcon />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Sandbox" 
-                sx={{ 
-                  color: 'white',
-                  '& .MuiListItemText-primary': {
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold'
-                  }
-                }} 
-              />
-            </ListItemButton>
-          </ListItem>
-        </Box>
-
-        {/* Data Synthesis Section */}
-        <Box sx={{ mb: 3 }}>
-          <ListItem disablePadding sx={{ mb: 0.5 }}>
-            <ListItemButton
-              component="a"
-              href="/data-synthesis"
-              sx={{
-                borderRadius: 1,
-                mx: 1,
-                '&:hover': { bgcolor: '#616161' },
-              }}
-            >
-              <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
-                <DataSynthesisIcon />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Data Synthesis" 
-                sx={{ 
-                  color: 'white',
-                  '& .MuiListItemText-primary': {
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold'
-                  }
-                }} 
-              />
-            </ListItemButton>
-          </ListItem>
-        </Box>
 
         {/* User Management Section - Admin only */}
         {user?.role === 'admin' && (
@@ -522,14 +461,6 @@ function AppContent() {
           <Route 
             path="/repayments" 
             element={<RepaymentsPage onShowSnackbar={showSnackbar} />} 
-          />
-          <Route 
-            path="/sandbox" 
-            element={<SandboxPage onShowSnackbar={showSnackbar} />} 
-          />
-          <Route 
-            path="/data-synthesis" 
-            element={<DataSynthesisPage onShowSnackbar={showSnackbar} />} 
           />
           <Route 
             path="/settings" 

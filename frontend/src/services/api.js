@@ -113,5 +113,75 @@ export const userAPI = {
   changePassword: (id, passwordData) => api.post(`/api/users/${id}/change-password`, passwordData),
 };
 
+// Auditor endpoints
+export const auditAPI = {
+  // Get flagged items for auditor review
+  getFlaggedItems: (params) => api.get('/api/audit/flagged-items', { params }),
+  
+  // Get detailed flagged item with original data
+  getFlaggedItemDetail: (id) => api.get(`/api/audit/flagged-items/${id}/detail`),
+  
+  // Classify flagged item (confirm fraud or false positive)
+  classifyFlaggedItem: (id, data) => api.post(`/api/audit/flagged-items/${id}/classify`, data),
+  
+  // Add audit note to flagged item
+  addAuditNote: (id, data) => api.post(`/api/audit/flagged-items/${id}/notes`, data),
+  
+  // Get audit notes for flagged item
+  getAuditNotes: (id) => api.get(`/api/audit/flagged-items/${id}/notes`),
+  
+  // Get personal review history
+  getPersonalReviewHistory: (params) => api.get('/api/audit/my-reviews', { params }),
+  
+  // Get audit trail for flagged item
+  getAuditTrail: (id) => api.get(`/api/audit/flagged-items/${id}/audit-trail`),
+  
+  // Get audit statistics
+  getAuditStats: () => api.get('/api/audit/stats'),
+};
+
+// Admin endpoints
+export const adminAPI = {
+  // Performance Reports
+  generatePerformanceReport: (data) => api.post('/api/admin/reports/generate', data),
+  getPerformanceReports: (params) => api.get('/api/admin/reports', { params }),
+  getPerformanceReport: (id) => api.get(`/api/admin/reports/${id}`),
+  downloadPerformanceReport: (id) => api.get(`/api/admin/reports/${id}/download`),
+  
+  // KPI Metrics
+  getKPIMetrics: () => api.get('/api/admin/kpi/metrics'),
+  getKPIHistory: (params) => api.get('/api/admin/kpi/history', { params }),
+  getKPIDashboard: () => api.get('/api/admin/kpi/dashboard'),
+  
+  // Auditor Performance Auditing
+  getAllAuditorsPerformance: (params) => api.get('/api/admin/auditors/performance', { params }),
+  getAuditorPerformance: (id, params) => api.get(`/api/admin/auditors/${id}/performance`, { params }),
+  getAuditorReviews: (id, params) => api.get(`/api/admin/auditors/${id}/reviews`, { params }),
+  getAuditorsEfficiency: (params) => api.get('/api/admin/auditors/efficiency', { params }),
+  getAuditorWorkload: (params) => api.get('/api/admin/auditors/workload', { params }),
+  
+  // Risk Threshold Management
+  getRiskThresholds: () => api.get('/api/admin/config/risk-thresholds'),
+  updateRiskThresholds: (data) => api.put('/api/admin/config/risk-thresholds', data),
+  getRiskThresholdsHistory: (params) => api.get('/api/admin/config/risk-thresholds/history', { params }),
+  
+  // System Configuration
+  getSystemConfig: () => api.get('/api/admin/config'),
+  updateSystemConfig: (key, data) => api.put(`/api/admin/config/${key}`, data),
+  getSystemConfigHistory: (params) => api.get('/api/admin/config/history', { params }),
+  
+  // Case Assignment
+  assignCase: (data) => api.post('/api/admin/cases/assign', data),
+  bulkAssignCases: (data) => api.post('/api/admin/cases/bulk-assign', data),
+  getUnassignedCases: (params) => api.get('/api/admin/cases/unassigned', { params }),
+  getCaseAssignments: (params) => api.get('/api/admin/cases/assignments', { params }),
+  updateCaseAssignment: (id, data) => api.put(`/api/admin/cases/assignments/${id}`, data),
+  deleteCaseAssignment: (id) => api.delete(`/api/admin/cases/assignments/${id}`),
+  
+  // Analytics
+  getSystemOverview: () => api.get('/api/admin/analytics/overview'),
+  getTrendAnalysis: (params) => api.get('/api/admin/analytics/trends', { params }),
+  getThroughputMetrics: (params) => api.get('/api/admin/analytics/throughput', { params }),
+};
 
 export default api;
