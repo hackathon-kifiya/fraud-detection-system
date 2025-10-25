@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import {
   AppBar,
@@ -17,17 +17,19 @@ import {
   Avatar,
   Badge,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Upload as UploadIcon,
-  Analytics as AnalyticsIcon,
   Security as SecurityIcon,
   Notifications as NotificationsIcon,
   AccountCircle as AccountCircleIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  Flag as FlagIcon,
-  Report as ReportIcon,
   Settings as SettingsIcon,
   Group as GroupIcon,
   AccountBalance as TransactionsIcon,
@@ -37,11 +39,6 @@ import {
   Payment as RepaymentsIcon,
   ExpandLess,
   ExpandMore,
-  Pets as DogIcon,
-  PlayArrow as EvaluationIcon,
-  Add as AddIcon,
-  Storage as StorageIcon,
-  Speed as SpeedIcon,
 } from '@mui/icons-material';
 import Dashboard from './components/Dashboard';
 import TransactionsPage from './components/TransactionsPage';
@@ -63,9 +60,14 @@ function AppContent() {
   const [openMenus, setOpenMenus] = useState({
     fraudDetection: true,
   });
+  const [logoutDialog, setLogoutDialog] = useState(false);
 
   // Helper function to check if a route is active
   const isActiveRoute = (path) => {
+    // Handle root path redirect to dashboard
+    if (path === '/dashboard' && (location.pathname === '/' || location.pathname === '/dashboard')) {
+      return true;
+    }
     return location.pathname === path;
   };
 
@@ -75,6 +77,19 @@ function AppContent() {
 
   const handleSnackbarClose = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleLogoutClick = () => {
+    setLogoutDialog(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setLogoutDialog(false);
+    logout();
+  };
+
+  const handleLogoutCancel = () => {
+    setLogoutDialog(false);
   };
 
   const toggleMenu = (menu) => {
@@ -456,7 +471,7 @@ function AppContent() {
                       {user?.role?.toUpperCase()}
                     </Typography>
                   </Box>
-                  <IconButton size="small" onClick={logout}>
+                  <IconButton size="small" onClick={handleLogoutClick}>
                     <KeyboardArrowDownIcon sx={{ color: 'black' }} />
                   </IconButton>
                 </Box>
@@ -518,6 +533,31 @@ function AppContent() {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Logout Confirmation Dialog */}
+        <Dialog
+          open={logoutDialog}
+          onClose={handleLogoutCancel}
+          aria-labelledby="logout-dialog-title"
+          aria-describedby="logout-dialog-description"
+        >
+          <DialogTitle id="logout-dialog-title">
+            Confirm Logout
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="logout-dialog-description">
+              Are you sure you want to logout? You will need to sign in again to access the system.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleLogoutCancel} color="primary">
+              Cancel
+            </Button>
+            <Button onClick={handleLogoutConfirm} color="error" variant="contained">
+              Logout
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Router>
   );
