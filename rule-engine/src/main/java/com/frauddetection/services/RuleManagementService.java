@@ -1,8 +1,9 @@
 package com.frauddetection.services;
 
 import com.frauddetection.domain.Rule;
-import com.frauddetection.domain.RuleVersion;
 import com.frauddetection.domain.ValidationResult;
+import com.frauddetection.dto.RuleRequestDto;
+import com.frauddetection.mapper.RuleMapper;
 import com.frauddetection.repository.RuleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -10,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -22,27 +22,17 @@ public class RuleManagementService {
     @Autowired
     private RuleValidationService validationService;
 
-    @Transactional
-    public Rule createRule(String name, String description, String dataType, String drlContent, String createdBy) {
-        // Check if rule name already exists
-        if (ruleRepository.findByName(name).isPresent()) {
-            throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
-        }
+    @Autowired
+    private RuleMapper ruleMapper;
 
-        // Validate DRL content
-        ValidationResult validation = validationService.validateDrl(drlContent, dataType);
+    @Transactional
+    public Rule createRule(RuleRequestDto request) {
+        ValidationResult validation = validationService.validateDrl(request.getDrlContent(), request.getDataType());
         if (!validation.isValid()) {
             throw new IllegalArgumentException("DRL validation failed: " + String.join(", ", validation.getErrors()));
         }
 
-        Rule rule = Rule.builder()
-        .name(name)
-        .description(description)
-        .dataType(dataType)
-        .drlContent(drlContent)
-        .createdBy(createdBy)
-        .build();
-
+        Rule rule = ruleMapper.toEntity(request);
         rule = ruleRepository.save(rule);
         return rule;
     }
@@ -56,7 +46,6 @@ public class RuleManagementService {
         if (!rule.getName().equals(name) && ruleRepository.findByName(name).isPresent()) {
             throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
         }
-
 
         // Update rule
         rule.setName(name);

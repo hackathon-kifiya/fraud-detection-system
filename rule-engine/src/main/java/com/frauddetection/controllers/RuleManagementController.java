@@ -2,6 +2,8 @@ package com.frauddetection.controllers;
 
 import com.frauddetection.domain.Rule;
 import com.frauddetection.domain.RuleVersion;
+import com.frauddetection.dto.RuleRequestDto;
+import com.frauddetection.mapper.RuleMapper;
 import com.frauddetection.services.RuleManagementService;
 import com.frauddetection.services.RuleValidationService;
 import lombok.Data;
@@ -23,32 +25,14 @@ public class RuleManagementController {
     private RuleManagementService ruleManagementService;
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createRule(@RequestBody CreateRuleRequest request) {
-        try {
-            Rule rule = ruleManagementService.createRule(
-                request.getName(),
-                request.getDescription(),
-                request.getDataType(),
-                request.getDrlContent(),
-                request.getCreatedBy()
-            );
+    public ResponseEntity<Map<String, Object>> createRule(@RequestBody RuleRequestDto request) {
+        Rule rule = ruleManagementService.createRule(request);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Rule created successfully");
-            response.put("rule", rule);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", "Internal server error: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Rule created successfully");
+        response.put("rule", rule);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping
@@ -245,26 +229,6 @@ public class RuleManagementController {
             response.put("error", "Internal server error: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-    }
-
-    // Request DTOs
-    @Data
-    public static class CreateRuleRequest {
-        private String name;
-        private String description;
-        private String dataType;
-        private String drlContent;
-        private String createdBy;
-    }
-
-    @Data
-    public static class UpdateRuleRequest {
-        private String name;
-        private String description;
-        private String dataType;
-        private String drlContent;
-        private String changeDescription;
-        private String updatedBy;
     }
 
     @Data
