@@ -148,5 +148,19 @@ func seedDatabase(db *gorm.DB) error {
 		return fmt.Errorf("failed to create viewer user: %w", err)
 	}
 
+	// Create lab techie user
+	labTechieUser := domain.CreateUserRequest{
+		Email:     "lab@fraud-detection.com",
+		Password:  "lab123",
+		FirstName: "Lab",
+		LastName:  "Techie",
+		Role:      domain.RoleLabTechie,
+	}
+
+	_, err = userService.Register(nil, labTechieUser)
+	if err != nil && err != service.ErrUserExists {
+		return fmt.Errorf("failed to create lab techie user: %w", err)
+	}
+
 	return nil
 }

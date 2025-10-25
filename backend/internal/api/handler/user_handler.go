@@ -30,6 +30,13 @@ func InitUserHandler(svc *service.UserService, r *gin.Engine) {
 		protected.DELETE("/:id", deleteUserHandler)
 		protected.POST("/:id/change-password", changePasswordHandler)
 	}
+
+	// Auth protected routes
+	authProtected := r.Group("/api/auth")
+	authProtected.Use(authMiddleware())
+	{
+		authProtected.GET("/profile", getProfileHandler)
+	}
 }
 
 // registerHandler handles user registration
@@ -189,6 +196,23 @@ func changePasswordHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
+}
+
+// getProfileHandler returns the current user's profile
+func getProfileHandler(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	user, err := userService.GetUser(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
 }
 
 // authMiddleware validates JWT token and adds user info to context
