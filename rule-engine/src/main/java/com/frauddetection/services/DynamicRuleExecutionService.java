@@ -148,11 +148,11 @@ public class DynamicRuleExecutionService {
 
     private EvaluationResponse.Verdict calculateVerdict(double riskScore) {
         if (riskScore >= 50) {
-            return EvaluationResponse.Verdict.REJECT;
+            return EvaluationResponse.Verdict.FAIL;
         } else if (riskScore >= 20) {
             return EvaluationResponse.Verdict.REVIEW;
         } else {
-            return EvaluationResponse.Verdict.APPROVE;
+            return EvaluationResponse.Verdict.PASS;
         }
     }
 
@@ -161,7 +161,7 @@ public class DynamicRuleExecutionService {
             "unknown",
             0.0,
             new ArrayList<>(),
-            EvaluationResponse.Verdict.APPROVE
+            EvaluationResponse.Verdict.PASS
         );
         
         Map<String, Object> metadata = new HashMap<>();
@@ -191,13 +191,13 @@ public class DynamicRuleExecutionService {
         EvaluationResponse.Verdict overallVerdict = responses.stream()
                 .map(EvaluationResponse::getVerdict)
                 .max((v1, v2) -> {
-                    int score1 = v1 == EvaluationResponse.Verdict.REJECT ? 3 : 
-                                v1 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
-                    int score2 = v2 == EvaluationResponse.Verdict.REJECT ? 3 : 
-                                v2 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
+                    int score1 = v1 == EvaluationResponse.Verdict.FAIL ? 3 : 
+                                 v1 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
+                    int score2 = v2 == EvaluationResponse.Verdict.FAIL ? 3 : 
+                                 v2 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
                     return Integer.compare(score1, score2);
                 })
-                .orElse(EvaluationResponse.Verdict.APPROVE);
+                .orElse(EvaluationResponse.Verdict.PASS);
 
         // Create aggregated response
         EvaluationResponse aggregated = new EvaluationResponse(

@@ -4,6 +4,7 @@ import com.frauddetection.domain.Rule;
 import com.frauddetection.domain.RuleVersion;
 import com.frauddetection.services.RuleManagementService;
 import com.frauddetection.services.RuleValidationService;
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public class RuleManagementController {
         try {
             Rule rule = ruleManagementService.createRule(
                 request.getName(),
+                request.getDescription(),
                 request.getDataType(),
                 request.getDrlContent(),
                 request.getCreatedBy()
@@ -234,53 +236,30 @@ public class RuleManagementController {
     }
 
     // Request DTOs
+    @Data
     public static class CreateRuleRequest {
         private String name;
+        private String description;
         private Rule.DataType dataType;
         private String drlContent;
         private String createdBy;
-
-        // Getters and Setters
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        public Rule.DataType getDataType() { return dataType; }
-        public void setDataType(Rule.DataType dataType) { this.dataType = dataType; }
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public String getCreatedBy() { return createdBy; }
-        public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     }
 
+    @Data
     public static class UpdateRuleRequest {
         private String drlContent;
         private String changeDescription;
         private String updatedBy;
-
-        // Getters and Setters
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public String getChangeDescription() { return changeDescription; }
-        public void setChangeDescription(String changeDescription) { this.changeDescription = changeDescription; }
-        public String getUpdatedBy() { return updatedBy; }
-        public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
     }
 
+    @Data
     public static class ValidateDrlRequest {
         private String drlContent;
         private Rule.DataType dataType;
-
-        // Getters and Setters
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public Rule.DataType getDataType() { return dataType; }
-        public void setDataType(Rule.DataType dataType) { this.dataType = dataType; }
     }
 
+    @Data
     public static class RollbackRequest {
         private String rolledBackBy;
-
-        // Getters and Setters
-        public String getRolledBackBy() { return rolledBackBy; }
-        public void setRolledBackBy(String rolledBackBy) { this.rolledBackBy = rolledBackBy; }
     }
 }

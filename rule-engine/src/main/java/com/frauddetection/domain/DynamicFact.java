@@ -1,5 +1,7 @@
 package com.frauddetection.domain;
 
+import lombok.Data;
+
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
@@ -9,6 +11,7 @@ import java.util.ArrayList;
  * Dynamic fact class that can represent any data structure
  * This allows the rule engine to work with variable data without pre-modeled classes
  */
+@Data
 public class DynamicFact {
     private String entityId;
     private String dataType;
@@ -25,19 +28,6 @@ public class DynamicFact {
         this.entityId = entityId;
         this.dataType = dataType;
     }
-
-    // Getters and Setters
-    public String getEntityId() { return entityId; }
-    public void setEntityId(String entityId) { this.entityId = entityId; }
-
-    public String getDataType() { return dataType; }
-    public void setDataType(String dataType) { this.dataType = dataType; }
-
-    public Map<String, Object> getProperties() { return properties; }
-    public void setProperties(Map<String, Object> properties) { this.properties = properties; }
-
-    public List<Violation> getViolations() { return violations; }
-    public void setViolations(List<Violation> violations) { this.violations = violations; }
 
     // Convenience methods for property access
     public void setProperty(String key, Object value) {

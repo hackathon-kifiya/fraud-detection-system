@@ -1,0 +1,26 @@
+# Traefik dynamic configuration
+http:
+  middlewares:
+    # CORS middleware for rule engine
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+          - PATCH
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+          - "Accept"
+          - "Origin"
+        accessControlAllowOriginList:
+          - "http://localhost:3001"
+          - "http://localhost:3002"
+          - "http://localhost"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 86400
+

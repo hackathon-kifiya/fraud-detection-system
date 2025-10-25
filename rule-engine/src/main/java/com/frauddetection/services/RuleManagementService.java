@@ -26,7 +26,7 @@ public class RuleManagementService {
     private RuleValidationService validationService;
 
     @Transactional
-    public Rule createRule(String name, Rule.DataType dataType, String drlContent, String createdBy) {
+    public Rule createRule(String name, String description, Rule.DataType dataType, String drlContent, String createdBy) {
         // Check if rule name already exists
         if (ruleRepository.findByName(name).isPresent()) {
             throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
@@ -39,7 +39,7 @@ public class RuleManagementService {
         }
 
         // Create new rule
-        Rule rule = new Rule(name, dataType, drlContent, createdBy);
+        Rule rule = new Rule(name, description, dataType, drlContent, createdBy);
         rule = ruleRepository.save(rule);
 
         // Create initial version

@@ -1,6 +1,7 @@
 package com.frauddetection.services;
 
 import com.frauddetection.domain.Rule;
+import com.frauddetection.domain.DynamicFact;
 import com.frauddetection.domain.Transaction;
 import com.frauddetection.domain.KYC;
 import com.frauddetection.domain.LoanRequest;
