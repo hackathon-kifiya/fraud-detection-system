@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -13,9 +14,8 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @SuperBuilder
-public class Evaluation {
-    private String entityId;
-    private double riskScore;
-    private List<Violation> violations;
-    private EvaluationMetadata metadata;
+public class ValidationResult {
+    private boolean valid = false;
+    private List<String> errors = new ArrayList<>();
+    private List<String> warnings = new ArrayList<>();
 }

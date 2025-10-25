@@ -7,13 +7,12 @@ import (
 )
 
 func init() {
-	// Register health endpoint when router is available
 	router.RegisterHealthEndpoint()
 }
 
 func HealthHandler(c *gin.Context) {
 	c.JSON(200, gin.H{
-		"status":       "ok",
+		"status":       "healthy",
 		"service-name": "fraud-detection-backend",
 		"version":      "v0.1.0"})
 }

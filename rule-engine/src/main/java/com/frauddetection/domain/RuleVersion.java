@@ -1,12 +1,19 @@
 package com.frauddetection.domain;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
 import java.time.Instant;
 import java.util.UUID;
 
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@SuperBuilder
 public class RuleVersion {
     private UUID id;
     private UUID ruleId;
@@ -15,26 +22,4 @@ public class RuleVersion {
     private String changeDescription;
     private Instant createdAt;
     private String createdBy;
-
-    // Constructor for creating new versions
-    public RuleVersion(UUID ruleId, Integer version, String drlContent, String changeDescription, String createdBy) {
-        this.ruleId = ruleId;
-        this.version = version;
-        this.drlContent = drlContent;
-        this.changeDescription = changeDescription;
-        this.createdBy = createdBy;
-        this.createdAt = Instant.now();
-    }
-
-    @Override
-    public String toString() {
-        return "RuleVersion{" +
-                "id=" + id +
-                ", ruleId=" + ruleId +
-                ", version=" + version +
-                ", changeDescription='" + changeDescription + '\'' +
-                ", createdBy='" + createdBy + '\'' +
-                ", createdAt=" + createdAt +
-                '}';
-    }
 }

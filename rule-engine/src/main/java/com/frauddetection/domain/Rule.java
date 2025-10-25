@@ -1,19 +1,25 @@
 package com.frauddetection.domain;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
 import java.time.Instant;
 import java.util.UUID;
 
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@SuperBuilder
 public class Rule {
     private UUID id;
     private String name;
     private String description;
     private String dataType;
     private String drlContent;
-    private Integer version;
     private Status status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -22,30 +28,5 @@ public class Rule {
 
     public enum Status {
         ACTIVE, INACTIVE, DRAFT
-    }
-
-    // Constructor for creating new rules
-    public Rule(String name, String description, String dataType, String drlContent, String createdBy) {
-        this.name = name;
-        this.description = description;
-        this.dataType = dataType;
-        this.drlContent = drlContent;
-        this.createdBy = createdBy;
-        this.version = 1;
-        this.status = Status.DRAFT;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-    }
-
-    @Override
-    public String toString() {
-        return "Rule{" +
-                "id=" + id +
-                ", name='" + name + '\'' +
-                ", dataType=" + dataType +
-                ", version=" + version +
-                ", status=" + status +
-                ", createdBy='" + createdBy + '\'' +
-                '}';
     }
 }

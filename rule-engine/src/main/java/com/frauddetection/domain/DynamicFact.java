@@ -1,8 +1,11 @@
 package com.frauddetection.domain;
 
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
@@ -15,83 +18,11 @@ import java.util.ArrayList;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@SuperBuilder
 public class DynamicFact {
     private String entityId;
     private String dataType;
     private Map<String, Object> properties = new HashMap<>();
     private List<Violation> violations = new ArrayList<>();
-
-    public DynamicFact(String entityId, String dataType) {
-        this.entityId = entityId;
-        this.dataType = dataType;
-        this.properties = new HashMap<>();
-        this.violations = new ArrayList<>();
-    }
-
-    // Convenience methods for property access
-    public void setProperty(String key, Object value) {
-        this.properties.put(key, value);
-    }
-
-    public Object getProperty(String key) {
-        return this.properties.get(key);
-    }
-
-    public String getStringProperty(String key) {
-        Object value = getProperty(key);
-        return value != null ? value.toString() : null;
-    }
-
-    public Double getDoubleProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        return null;
-    }
-
-    public Integer getIntProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        return null;
-    }
-
-    public Boolean getBooleanProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Boolean) {
-            return (Boolean) value;
-        }
-        return null;
-    }
-
-    // Violation management
-    public void addViolation(String code, int weight, String description) {
-        this.violations.add(new Violation(code, weight, description));
-    }
-
-    public boolean hasViolations() {
-        return !violations.isEmpty();
-    }
-
-    public int getViolationCount() {
-        return violations.size();
-    }
-
-    public double getTotalRiskScore() {
-        return violations.stream()
-                .mapToDouble(Violation::getWeight)
-                .sum();
-    }
-
-    @Override
-    public String toString() {
-        return "DynamicFact{" +
-                "entityId='" + entityId + '\'' +
-                ", dataType='" + dataType + '\'' +
-                ", properties=" + properties +
-                ", violationsCount=" + violations.size() +
-                '}';
-    }
 }
