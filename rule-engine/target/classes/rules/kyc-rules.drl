@@ -1,10 +1,10 @@
 package rules;
 
-import com.frauddetection.domain.KYC;
+import com.frauddetection.domain.DynamicFact;
 
 rule "Unverified KYC"
 when
-    $k: KYC( verifiedStatus == false )
+    $k: DynamicFact( dataType == "kyc", getBooleanProperty("verifiedStatus") == false )
 then
     $k.addViolation("KYC_UNVERIFIED", 15, "User is not KYC verified");
 end

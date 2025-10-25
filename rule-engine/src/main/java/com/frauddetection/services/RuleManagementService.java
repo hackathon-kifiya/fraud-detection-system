@@ -26,7 +26,7 @@ public class RuleManagementService {
     private RuleValidationService validationService;
 
     @Transactional
-    public Rule createRule(String name, Rule.DataType dataType, String drlContent, String createdBy) {
+    public Rule createRule(String name, String description, String dataType, String drlContent, String createdBy) {
         // Check if rule name already exists
         if (ruleRepository.findByName(name).isPresent()) {
             throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
@@ -39,12 +39,46 @@ public class RuleManagementService {
         }
 
         // Create new rule
-        Rule rule = new Rule(name, dataType, drlContent, createdBy);
+        Rule rule = new Rule(name, description, dataType, drlContent, createdBy);
         rule = ruleRepository.save(rule);
 
         // Create initial version
         RuleVersion version = new RuleVersion(rule.getId(), 1, drlContent, "Initial version", createdBy);
         ruleVersionRepository.save(version);
+
+        return rule;
+    }
+
+    @Transactional
+    public Rule updateRule(UUID ruleId, String name, String description, String dataType, String drlContent, String changeDescription, String updatedBy) {
+        Rule rule = ruleRepository.findById(ruleId)
+                .orElseThrow(() -> new IllegalArgumentException("Rule not found with id: " + ruleId));
+
+        // Check if name is being changed and if new name already exists
+        if (!rule.getName().equals(name) && ruleRepository.findByName(name).isPresent()) {
+            throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
+        }
+
+        // Validate DRL content
+        RuleValidationService.ValidationResult validation = validationService.validateDrl(drlContent, dataType);
+        if (!validation.isValid()) {
+            throw new IllegalArgumentException("DRL validation failed: " + String.join(", ", validation.getErrors()));
+        }
+
+        // Create new version
+        int newVersion = rule.getVersion() + 1;
+        RuleVersion version = new RuleVersion(ruleId, newVersion, drlContent, changeDescription, updatedBy);
+        ruleVersionRepository.save(version);
+
+        // Update rule
+        rule.setName(name);
+        rule.setDescription(description);
+        rule.setDataType(dataType);
+        rule.setDrlContent(drlContent);
+        rule.setVersion(newVersion);
+        rule.setUpdatedAt(Instant.now());
+        rule.setUpdatedBy(updatedBy);
+        rule = ruleRepository.save(rule);
 
         return rule;
     }
@@ -69,6 +103,7 @@ public class RuleManagementService {
         rule.setDrlContent(drlContent);
         rule.setVersion(newVersion);
         rule.setUpdatedAt(Instant.now());
+        rule.setUpdatedBy(updatedBy);
         rule = ruleRepository.save(rule);
 
         return rule;
@@ -109,20 +144,83 @@ public class RuleManagementService {
         return (List<Rule>) ruleRepository.findAll();
     }
 
-    public List<Rule> getRulesByDataType(Rule.DataType dataType) {
+    public List<Rule> getRulesByDataType(String dataType) {
         return ruleRepository.findByDataType(dataType);
     }
 
-    public List<Rule> getRulesByDataTypeAndStatus(Rule.DataType dataType, Rule.Status status) {
+    public List<Rule> getRulesByDataTypeAndStatus(String dataType, Rule.Status status) {
         return ruleRepository.findByDataTypeAndStatus(dataType, status);
     }
 
-    public List<Rule> getActiveRulesByDataType(Rule.DataType dataType) {
-        return ruleRepository.findActiveRulesByDataType(dataType.name());
+    public List<Rule> getActiveRulesByDataType(String dataType) {
+        return ruleRepository.findActiveRulesByDataType(dataType);
     }
 
     public List<Rule> getRulesByStatus(Rule.Status status) {
         return ruleRepository.findByStatus(status);
+    }
+
+    public List<Rule> searchRules(String search, String dataType, String status, Integer limit, Integer offset) {
+        // Handle search with filters
+        if (search != null && !search.trim().isEmpty()) {
+            if (dataType != null && status != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatus(
+                    "%" + search + "%", dataType, status);
+            } else if (dataType != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndDataType(
+                    "%" + search + "%", dataType);
+            } else if (status != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndStatus(
+                    "%" + search + "%", status);
+            } else {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCase("%" + search + "%");
+            }
+        }
+        
+        // Handle filters without search
+        if (dataType != null && status != null) {
+            return ruleRepository.findByDataTypeAndStatus(dataType, Rule.Status.valueOf(status.toUpperCase()));
+        } else if (dataType != null) {
+            return ruleRepository.findByDataType(dataType);
+        } else if (status != null) {
+            return ruleRepository.findByStatus(Rule.Status.valueOf(status.toUpperCase()));
+        } else {
+            return ruleRepository.findAllOrderByCreatedAt();
+        }
+    }
+
+    public List<Rule> searchRulesWithPagination(String search, String dataType, String status, Integer limit, Integer offset) {
+        // Set default values
+        int limitValue = limit != null ? limit : 100;
+        int offsetValue = offset != null ? offset : 0;
+        
+        // Handle search with filters
+        if (search != null && !search.trim().isEmpty()) {
+            if (dataType != null && status != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatusWithPagination(
+                    "%" + search + "%", dataType, status, limitValue, offsetValue);
+            } else if (dataType != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndDataTypeWithPagination(
+                    "%" + search + "%", dataType, limitValue, offsetValue);
+            } else if (status != null) {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseAndStatusWithPagination(
+                    "%" + search + "%", status, limitValue, offsetValue);
+            } else {
+                return ruleRepository.findByNameOrDescriptionContainingIgnoreCaseWithPagination(
+                    "%" + search + "%", limitValue, offsetValue);
+            }
+        }
+        
+        // Handle filters without search
+        if (dataType != null && status != null) {
+            return ruleRepository.findByDataTypeAndStatusWithPagination(dataType, status, limitValue, offsetValue);
+        } else if (dataType != null) {
+            return ruleRepository.findByDataTypeWithPagination(dataType, limitValue, offsetValue);
+        } else if (status != null) {
+            return ruleRepository.findByStatusWithPagination(status, limitValue, offsetValue);
+        } else {
+            return ruleRepository.findAllOrderByCreatedAtWithPagination(limitValue, offsetValue);
+        }
     }
 
     public Optional<Rule> getRuleById(UUID ruleId) {
@@ -162,7 +260,7 @@ public class RuleManagementService {
         return ruleRepository.save(rule);
     }
 
-    public RuleValidationService.ValidationResult validateDrl(String drlContent, Rule.DataType dataType) {
+    public RuleValidationService.ValidationResult validateDrl(String drlContent, String dataType) {
         return validationService.validateDrl(drlContent, dataType);
     }
 }

@@ -1,6 +1,40 @@
 version: "3.8"
 
 services:
+  # Traefik API Gateway
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.dashboard.address=:8082"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+      - "--ping=true"
+    ports:
+      - "80:80"
+      - "8080:8082"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik_logs:/var/log/traefik
+    networks:
+      - default
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   postgres:
     image: postgres:15
     environment:
@@ -18,64 +52,138 @@ services:
       retries: 5
   anomaly-detection-engine:
     build: ./anomaly-detection-engine
-    ports:
-      - "5001:5001"
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.anomaly.rule=PathPrefix(`/api/anomaly`)"
+      - "traefik.http.routers.anomaly.entrypoints=web"
+      - "traefik.http.routers.anomaly.service=anomaly"
+      - "traefik.http.middlewares.strip-anomaly-prefix.stripprefix.prefixes=/api/anomaly"
+      - "traefik.http.routers.anomaly.middlewares=strip-anomaly-prefix"
+      - "traefik.http.services.anomaly.loadbalancer.server.port=5001"
+      - "traefik.http.services.anomaly.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.anomaly.loadbalancer.healthcheck.interval=30s"
+
+  prediction-engine:
+    build: ./prediction-engine
+    environment:
+      - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prediction.rule=PathPrefix(`/api/predict`)"
+      - "traefik.http.routers.prediction.entrypoints=web"
+      - "traefik.http.routers.prediction.service=prediction"
+      - "traefik.http.middlewares.strip-prediction-prefix.stripprefix.prefixes=/api/predict"
+      - "traefik.http.routers.prediction.middlewares=strip-prediction-prefix"
+      - "traefik.http.services.prediction.loadbalancer.server.port=5002"
+      - "traefik.http.services.prediction.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.prediction.loadbalancer.healthcheck.interval=30s"
+
+  risk-aggregation-engine:
+    build: ./risk-aggregation-engine
+    environment:
+      - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.risk.rule=PathPrefix(`/api/risk`)"
+      - "traefik.http.routers.risk.entrypoints=web"
+      - "traefik.http.routers.risk.service=risk"
+      - "traefik.http.middlewares.strip-risk-prefix.stripprefix.prefixes=/api/risk"
+      - "traefik.http.routers.risk.middlewares=strip-risk-prefix"
+      - "traefik.http.services.risk.loadbalancer.server.port=5003"
+      - "traefik.http.services.risk.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.risk.loadbalancer.healthcheck.interval=30s"
 
   rule-engine:
     build: ./rule-engine
-    ports:
-      - "8082:8081"
     environment:
       - DATABASE_URL=jdbc:postgresql://postgres:5432/frauddb
       - DATABASE_USER=frauduser
       - DATABASE_PASSWORD=fraudpass
+      - SERVER_PORT=8081
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rule-engine.rule=PathPrefix(`/api/rules`)"
+      - "traefik.http.routers.rule-engine.entrypoints=web"
+      - "traefik.http.routers.rule-engine.service=rule-engine"
+      - "traefik.http.middlewares.strip-rules-prefix.stripprefix.prefixes=/api/rules"
+      - "traefik.http.routers.rule-engine.middlewares=strip-rules-prefix"
+      - "traefik.http.routers.evaluate.rule=PathPrefix(`/api/evaluate`)"
+      - "traefik.http.routers.evaluate.entrypoints=web"
+      - "traefik.http.routers.evaluate.service=rule-engine"
+      - "traefik.http.middlewares.strip-evaluate-prefix.stripprefix.prefixes=/api/evaluate"
+      - "traefik.http.routers.evaluate.middlewares=strip-evaluate-prefix"
+      - "traefik.http.services.rule-engine.loadbalancer.server.port=8081"
+      - "traefik.http.services.rule-engine.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.rule-engine.loadbalancer.healthcheck.interval=30s"
 
   backend:
     build: ./backend
-    ports:
-      - "8081:8080"
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
-      - ENGINE_URL=http://rule-engine:8081/api
+      - ENGINE_URL=http://rule-engine:8081
+      - ANOMALY_DETECTION_ENGINE_URL=http://anomaly-detection-engine:5001
+      - PREDICTIVE_ENGINE_URL=http://prediction-engine:5002
+      - RISK_AGGREGATION_ENGINE_URL=http://risk-aggregation-engine:5003
       - PYTHON_STATS_URL=http://anomaly-detection-engine:5001
     depends_on:
       postgres:
         condition: service_healthy
       rule-engine:
         condition: service_started
+      anomaly-detection-engine:
+        condition: service_started
+      prediction-engine:
+        condition: service_started
+      risk-aggregation-engine:
+        condition: service_started
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api/backend`, `/api/users`, `/api/auth`, `/api/admin`, `/api/audit`, `/api/flagged-items`, `/health`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.service=backend"
+      - "traefik.http.middlewares.strip-backend-prefix.stripprefix.prefixes=/api/backend"
+      - "traefik.http.routers.backend.middlewares=strip-backend-prefix"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.interval=30s"
 
   frontend:
     build:
       context: ./frontend
       args:
-        - REACT_APP_BACKEND_URL=http://localhost:8081
-    ports:
-      - "3001:3000"
+        - REACT_APP_BACKEND_URL=http://localhost
     depends_on:
       - backend
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
-  lab-portal:
-    build:
-      context: ./lab-portal
-      args:
-        - REACT_APP_BACKEND_URL=http://localhost:8081
-    ports:
-      - "3002:3000"
-    depends_on:
-      - backend
-    restart: unless-stopped
 
 volumes:
   postgres_data:
+  traefik_logs:

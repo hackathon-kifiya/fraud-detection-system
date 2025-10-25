@@ -1,11 +1,7 @@
 package com.frauddetection.services;
 
 import com.frauddetection.domain.Rule;
-import com.frauddetection.domain.Transaction;
-import com.frauddetection.domain.KYC;
-import com.frauddetection.domain.LoanRequest;
-import com.frauddetection.domain.CreditHistory;
-import com.frauddetection.domain.Repayment;
+import com.frauddetection.domain.DynamicFact;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
@@ -23,9 +19,9 @@ import java.util.regex.Pattern;
 public class RuleValidationService {
 
     private static final String PACKAGE_PATTERN = "package\\s+rules\\s*;";
-    private static final Pattern CLASS_REFERENCE_PATTERN = Pattern.compile("\\b(Transaction|KYC|LoanRequest|CreditHistory|Repayment)\\b");
+    private static final Pattern CLASS_REFERENCE_PATTERN = Pattern.compile("\\bDynamicFact\\b");
 
-    public ValidationResult validateDrl(String drlContent, Rule.DataType dataType) {
+    public ValidationResult validateDrl(String drlContent, String dataType) {
         ValidationResult result = new ValidationResult();
         
         // 1. Basic syntax validation
@@ -85,7 +81,7 @@ public class RuleValidationService {
         return true;
     }
 
-    private boolean validateDomainClasses(String drlContent, Rule.DataType dataType, ValidationResult result) {
+    private boolean validateDomainClasses(String drlContent, String dataType, ValidationResult result) {
         // For dynamic facts, we expect DynamicFact class references
         if (!drlContent.contains("DynamicFact")) {
             result.addError("DRL must reference DynamicFact class for dynamic data evaluation");
@@ -101,12 +97,12 @@ public class RuleValidationService {
         return true;
     }
 
-    private boolean isValidClassForDataType(String className, Rule.DataType dataType) {
+    private boolean isValidClassForDataType(String className, String dataType) {
         // For dynamic facts, only DynamicFact is valid
         return "DynamicFact".equals(className);
     }
 
-    private boolean validateSemantics(String drlContent, Rule.DataType dataType, ValidationResult result) {
+    private boolean validateSemantics(String drlContent, String dataType, ValidationResult result) {
         try {
             // Create test data based on data type
             Object testData = createTestData(dataType);
@@ -142,34 +138,41 @@ public class RuleValidationService {
         }
     }
 
-    private Object createTestData(Rule.DataType dataType) {
-        DynamicFact fact = new DynamicFact("test-entity", dataType.name().toLowerCase());
+    private Object createTestData(String dataType) {
+        DynamicFact fact = new DynamicFact("test-entity", dataType.toLowerCase());
         
-        switch (dataType) {
-            case TRANSACTION:
+        // Create generic test data based on common patterns
+        switch (dataType.toLowerCase()) {
+            case "transaction":
                 fact.setProperty("amount", 1000.0);
                 fact.setProperty("accountBalance", 500.0);
                 fact.setProperty("type", "debit");
                 fact.setProperty("paymentMethod", "card");
                 break;
-            case KYC:
+            case "kyc":
                 fact.setProperty("verifiedStatus", false);
                 fact.setProperty("verificationDate", "2023-01-01");
                 break;
-            case LOAN:
+            case "loan":
                 fact.setProperty("amount", 60000.0);
                 fact.setProperty("term", 36);
                 fact.setProperty("interestRate", 5.5);
                 break;
-            case CREDIT:
+            case "credit":
                 fact.setProperty("score", 650);
                 fact.setProperty("historyLength", 24);
                 fact.setProperty("delinquencies", 0);
                 break;
-            case REPAYMENT:
+            case "repayment":
                 fact.setProperty("amount", 500.0);
                 fact.setProperty("dueDate", "2023-12-01");
                 fact.setProperty("isLate", false);
+                break;
+            default:
+                // For custom data types, create generic test data
+                fact.setProperty("amount", 100.0);
+                fact.setProperty("status", "active");
+                fact.setProperty("timestamp", java.time.Instant.now());
                 break;
         }
         

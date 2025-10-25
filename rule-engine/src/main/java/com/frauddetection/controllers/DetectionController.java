@@ -21,8 +21,9 @@ public class DetectionController {
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> resp = new HashMap<>();
-        resp.put("status", "healthy");
         resp.put("service", "java-engine");
+        resp.put("version", "0.1.0");
+        resp.put("status", "healthy");
         return ResponseEntity.ok(resp);
     }
 

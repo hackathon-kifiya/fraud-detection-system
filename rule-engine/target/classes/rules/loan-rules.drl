@@ -1,10 +1,10 @@
 package rules;
 
-import com.frauddetection.domain.LoanRequest;
+import com.frauddetection.domain.DynamicFact;
 
 rule "High loan amount"
 when
-    $l: LoanRequest( amountRequested > 50000 )
+    $l: DynamicFact( dataType == "loan", getDoubleProperty("amountRequested") > 50000 )
 then
     $l.addViolation("LOAN_HIGH_AMOUNT", 20, "Loan amount exceeds threshold");
 end

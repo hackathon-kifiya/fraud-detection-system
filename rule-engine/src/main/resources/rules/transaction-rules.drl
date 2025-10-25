@@ -1,18 +1,29 @@
 package rules;
 
-import com.frauddetection.domain.Transaction;
+import com.frauddetection.domain.DynamicFact;
 
 rule "High amount vs balance"
 when
-    $t: Transaction( amount > accountBalance * 2 )
+    $t: DynamicFact( dataType == "transaction", getDoubleProperty("amount") > getDoubleProperty("accountBalance") * 2 )
 then
     $t.addViolation("TXN_HIGH_VS_BAL", 20, "Transaction amount exceeds 2x account balance");
 end
 
 rule "Nighttime activity"
 when
-    $t: Transaction( timestamp.getEpochSecond() % 86400 < 5 * 3600 || timestamp.getEpochSecond() % 86400 > 23 * 3600 )
+    $t: DynamicFact( dataType == "transaction", 
+        getProperty("timestamp") != null && 
+        ((java.time.Instant) getProperty("timestamp")).getEpochSecond() % 86400 < 5 * 3600 || 
+        ((java.time.Instant) getProperty("timestamp")).getEpochSecond() % 86400 > 23 * 3600 )
 then
     $t.addViolation("TXN_NIGHT", 10, "Transaction during nighttime window");
+end
+
+// Example of dynamic rule for custom data types
+rule "Custom payment rule"
+when
+    $p: DynamicFact( dataType == "payment", getDoubleProperty("amount") > 10000 )
+then
+    $p.addViolation("PAYMENT_HIGH_AMOUNT", 15, "High value payment detected");
 end
 
