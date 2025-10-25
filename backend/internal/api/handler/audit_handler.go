@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/domain"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/service"
@@ -41,6 +42,11 @@ func InitAuditHandler(svc *service.AuditService, r *gin.Engine) {
 
 		// Get auditor statistics
 		protected.GET("/stats", getAuditStatsHandler)
+
+		// Assignment management for auditors
+		protected.GET("/my-assignments", getMyAssignmentsHandler)
+		protected.GET("/assignments/:id", getAssignmentDetailHandler)
+		protected.PUT("/assignments/:id/status", updateAssignmentStatusHandler)
 	}
 }
 
@@ -240,4 +246,98 @@ func getAuditStatsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+// getMyAssignmentsHandler handles getting assignments for the logged-in auditor
+func getMyAssignmentsHandler(c *gin.Context) {
+	// Get user ID from context
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	// Parse query parameters
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+	status := c.Query("status")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	assignments, total, err := auditService.GetMyAssignments(c.Request.Context(), userID, limit, offset, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"assignments": assignments,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
+}
+
+// getAssignmentDetailHandler handles getting assignment details
+func getAssignmentDetailHandler(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	// Get user ID from context
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	assignment, err := auditService.GetAssignmentDetail(c.Request.Context(), id, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"assignment": assignment})
+}
+
+// updateAssignmentStatusHandler handles updating assignment status
+func updateAssignmentStatusHandler(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	// Get user ID from context
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	var req struct {
+		Status string `json:"status" binding:"required,oneof=assigned in_progress completed cancelled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	assignment, err := auditService.UpdateAssignmentStatus(c.Request.Context(), id, userID, req.Status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"assignment": assignment})
 }

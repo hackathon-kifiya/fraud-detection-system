@@ -390,9 +390,33 @@ func getUnassignedCasesHandler(c *gin.Context) {
 }
 
 func getCaseAssignmentsHandler(c *gin.Context) {
-	// This would need to be implemented in the admin service
-	// For now, return empty response
-	c.JSON(http.StatusOK, gin.H{"assignments": []domain.CaseAssignment{}})
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+	status := c.Query("status")
+	priority := c.Query("priority")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	assignments, total, err := adminService.GetCaseAssignments(c.Request.Context(), limit, offset, status, priority)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"assignments": assignments,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
 }
 
 func updateAssignmentHandler(c *gin.Context) {
@@ -402,9 +426,26 @@ func updateAssignmentHandler(c *gin.Context) {
 		return
 	}
 
-	// This would need to be implemented in the admin service
-	// For now, return not implemented
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
+	var req domain.UpdateAssignmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get admin user ID from context
+	adminID := c.GetString("user_id")
+	if adminID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin not authenticated"})
+		return
+	}
+
+	assignment, err := adminService.UpdateCaseAssignment(c.Request.Context(), id, req, adminID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"assignment": assignment})
 }
 
 func removeAssignmentHandler(c *gin.Context) {
@@ -414,9 +455,20 @@ func removeAssignmentHandler(c *gin.Context) {
 		return
 	}
 
-	// This would need to be implemented in the admin service
-	// For now, return not implemented
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
+	// Get admin user ID from context
+	adminID := c.GetString("user_id")
+	if adminID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin not authenticated"})
+		return
+	}
+
+	err := adminService.RemoveCaseAssignment(c.Request.Context(), id, adminID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Assignment removed successfully"})
 }
 
 func getAuditorWorkloadHandler(c *gin.Context) {
