@@ -1,10 +1,6 @@
 package com.frauddetection.services;
 
-import com.frauddetection.domain.DynamicFact;
-import com.frauddetection.domain.EvaluationRequest;
-import com.frauddetection.domain.EvaluationResponse;
-import com.frauddetection.domain.Rule;
-import com.frauddetection.domain.Violation;
+import com.frauddetection.domain.*;
 import com.frauddetection.repository.RuleRepository;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
@@ -27,68 +23,35 @@ public class DynamicRuleExecutionService {
     @Autowired
     private RuleRepository ruleRepository;
 
-    public EvaluationResponse evaluateFacts(EvaluationRequest request) {
-        // Get active rules for the data type
+    public Evaluation evaluateFacts(EvaluationQuery request) {
+        Evaluation response;
         List<Rule> activeRules = ruleRepository.findActiveRulesByDataType(request.getDataType());
-        
-        if (activeRules.isEmpty()) {
-            return createEmptyResponse("No active rules found for data type: " + request.getDataType());
-        }
 
-        // Convert request facts to DynamicFact objects
         List<DynamicFact> facts = convertToDynamicFacts(request);
-        
-        // Execute rules against each fact
-        List<EvaluationResponse> responses = new ArrayList<>();
-        
+        List<Evaluation> responses = new ArrayList<>();
+
         for (DynamicFact fact : facts) {
-            EvaluationResponse response = evaluateFact(fact, activeRules);
+            response = evaluateFact(fact, activeRules);
             responses.add(response);
         }
 
-        // If single fact, return single response
-        if (responses.size() == 1) {
-            return responses.get(0);
-        }
-
-        // Multiple facts - return aggregated response
         return aggregateResponses(responses);
     }
 
-    private EvaluationResponse evaluateFact(DynamicFact fact, List<Rule> rules) {
+    private Evaluation evaluateFact(DynamicFact fact, List<Rule> rules) {
+        double riskScore;
         try {
-            // Build KieBase from rules
             KieContainer kieContainer = buildKieContainerFromRules(rules);
             StatelessKieSession session = kieContainer.newStatelessKieSession();
-
-            // Execute rules against the fact
             session.execute(fact);
-
-            // Calculate risk score and verdict
-            double riskScore = fact.getTotalRiskScore();
-            // Rule engine only calculates risk score, verdict is determined by backend
-            return new EvaluationResponse(
-                fact.getEntityId(),
-                riskScore,
-                new ArrayList<>(fact.getViolations()),
-                EvaluationResponse.Verdict.PASS
-            );
-
+            riskScore = fact.getTotalRiskScore();
         } catch (Exception e) {
-            // Return error response
-            EvaluationResponse errorResponse = new EvaluationResponse(
-                fact.getEntityId(),
-                0.0,
-                new ArrayList<>(),
-                EvaluationResponse.Verdict.REVIEW
-            );
-            
-            Map<String, Object> metadata = new HashMap<>();
-            metadata.put("error", "Rule execution failed: " + e.getMessage());
-            errorResponse.setMetadata(metadata);
-            
-            return errorResponse;
+           throw new RuntimeException("failed to evaluate");
         }
+
+        return Evaluation.builder()
+                .riskScore(riskScore)
+                .build();
     }
 
     private KieContainer buildKieContainerFromRules(List<Rule> rules) {
@@ -118,7 +81,7 @@ public class DynamicRuleExecutionService {
         return kieServices.newKieContainer(kieBuilder.getKieModule().getReleaseId());
     }
 
-    private List<DynamicFact> convertToDynamicFacts(EvaluationRequest request) {
+    private List<DynamicFact> convertToDynamicFacts(EvaluationQuery request) {
         List<DynamicFact> facts = new ArrayList<>();
         
         for (Map<String, Object> factData : request.getFacts()) {
@@ -144,29 +107,10 @@ public class DynamicRuleExecutionService {
     }
 
 
-    private EvaluationResponse createEmptyResponse(String message) {
-        EvaluationResponse response = new EvaluationResponse(
-            "unknown",
-            0.0,
-            new ArrayList<>(),
-            EvaluationResponse.Verdict.PASS
-        );
-        
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("message", message);
-        response.setMetadata(metadata);
-        
-        return response;
-    }
+    private Evaluation aggregateResponses(List<Evaluation> responses) {
 
-    private EvaluationResponse aggregateResponses(List<EvaluationResponse> responses) {
-        if (responses.isEmpty()) {
-            return createEmptyResponse("No responses to aggregate");
-        }
-
-        // Calculate aggregate metrics
         double totalRiskScore = responses.stream()
-                .mapToDouble(EvaluationResponse::getRiskScore)
+                .mapToDouble(Evaluation::getRiskScore)
                 .sum();
         
         double averageRiskScore = totalRiskScore / responses.size();
@@ -175,25 +119,17 @@ public class DynamicRuleExecutionService {
                 .mapToInt(r -> r.getViolations() != null ? r.getViolations().size() : 0)
                 .sum();
 
-        // Rule engine only calculates risk score, verdict is determined by backend
-        EvaluationResponse.Verdict overallVerdict = EvaluationResponse.Verdict.PASS;
-
-        // Create aggregated response
-        EvaluationResponse aggregated = new EvaluationResponse(
-            "aggregated",
-            averageRiskScore,
-            new ArrayList<>(), // Individual violations not aggregated
-            overallVerdict
-        );
-
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("totalFacts", responses.size());
-        metadata.put("totalRiskScore", totalRiskScore);
-        metadata.put("averageRiskScore", averageRiskScore);
-        metadata.put("totalViolations", totalViolations);
-        metadata.put("individualResponses", responses);
-        aggregated.setMetadata(metadata);
-
-        return aggregated;
+        return Evaluation.builder()
+                .entityId("aggregated")
+                .riskScore(averageRiskScore)
+                .violations(new ArrayList<>())
+                .metadata(EvaluationMetadata.builder()
+                        .totalFacts(responses.size())
+                        .totalRiskScore(totalRiskScore)
+                        .averageRiskScore(averageRiskScore)
+                        .totalViolations(totalViolations)
+                        .individualResponses(responses.size())
+                        .build())
+                .build();
     }
 }
