@@ -45,6 +45,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&domain.FlaggedItem{},
 		&domain.AuditNote{},
 		&domain.AuditLog{},
+		&domain.SystemConfig{},
+		&domain.CaseAssignment{},
+		&domain.PerformanceReport{},
+		&domain.KPIMetrics{},
 	)
 
 	if err != nil {
