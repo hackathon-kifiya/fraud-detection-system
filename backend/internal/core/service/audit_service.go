@@ -10,17 +10,19 @@ import (
 )
 
 type AuditService struct {
-	flaggedItemRepo port.FlaggedItemRepository
-	auditNoteRepo   port.AuditNoteRepository
-	auditLogRepo    port.AuditLogRepository
+	flaggedItemRepo    port.FlaggedItemRepository
+	auditNoteRepo      port.AuditNoteRepository
+	auditLogRepo       port.AuditLogRepository
+	caseAssignmentRepo port.CaseAssignmentRepository
 }
 
 // NewAuditService creates a new audit service
-func NewAuditService(flaggedItemRepo port.FlaggedItemRepository, auditNoteRepo port.AuditNoteRepository, auditLogRepo port.AuditLogRepository) *AuditService {
+func NewAuditService(flaggedItemRepo port.FlaggedItemRepository, auditNoteRepo port.AuditNoteRepository, auditLogRepo port.AuditLogRepository, caseAssignmentRepo port.CaseAssignmentRepository) *AuditService {
 	return &AuditService{
-		flaggedItemRepo: flaggedItemRepo,
-		auditNoteRepo:   auditNoteRepo,
-		auditLogRepo:    auditLogRepo,
+		flaggedItemRepo:    flaggedItemRepo,
+		auditNoteRepo:      auditNoteRepo,
+		auditLogRepo:       auditLogRepo,
+		caseAssignmentRepo: caseAssignmentRepo,
 	}
 }
 
@@ -268,4 +270,86 @@ func (s *AuditService) ListFlaggedItemsForReview(ctx context.Context, req domain
 	}
 
 	return response, nil
+}
+
+// GetMyAssignments retrieves assignments for the logged-in auditor
+func (s *AuditService) GetMyAssignments(ctx context.Context, auditorID string, limit, offset int, status string) ([]domain.CaseAssignment, int64, error) {
+	return s.caseAssignmentRepo.GetByAuditorID(ctx, auditorID, limit, offset)
+}
+
+// GetAssignmentDetail retrieves assignment details for an auditor
+func (s *AuditService) GetAssignmentDetail(ctx context.Context, assignmentID, auditorID string) (*domain.CaseAssignment, error) {
+	assignment, err := s.caseAssignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("assignment not found: %w", err)
+	}
+
+	// Verify the assignment belongs to the auditor
+	if assignment.AuditorID != auditorID {
+		return nil, fmt.Errorf("assignment does not belong to this auditor")
+	}
+
+	return assignment, nil
+}
+
+// UpdateAssignmentStatus updates the status of an assignment
+func (s *AuditService) UpdateAssignmentStatus(ctx context.Context, assignmentID, auditorID, status string) (*domain.CaseAssignment, error) {
+	// Get existing assignment
+	assignment, err := s.caseAssignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("assignment not found: %w", err)
+	}
+
+	// Verify the assignment belongs to the auditor
+	if assignment.AuditorID != auditorID {
+		return nil, fmt.Errorf("assignment does not belong to this auditor")
+	}
+
+	// Validate status transition
+	oldStatus := assignment.Status
+	if !isValidStatusTransition(oldStatus, status) {
+		return nil, fmt.Errorf("invalid status transition from %s to %s", oldStatus, status)
+	}
+
+	// Update status
+	assignment.Status = status
+	err = s.caseAssignmentRepo.Update(ctx, assignment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update assignment status: %w", err)
+	}
+
+	// Create audit log entry
+	auditLog := &domain.AuditLog{
+		FlaggedItemID: assignment.FlaggedItemID,
+		UserID:        auditorID,
+		Action:        domain.ActionStatusChange,
+		OldStatus:     &oldStatus,
+		NewStatus:     &status,
+		Metadata:      fmt.Sprintf(`{"assignment_id": "%s", "updated_by": "auditor"}`, assignment.ID),
+	}
+	s.auditLogRepo.Create(ctx, auditLog)
+
+	return assignment, nil
+}
+
+// isValidStatusTransition validates if a status transition is allowed
+func isValidStatusTransition(oldStatus, newStatus string) bool {
+	validTransitions := map[string][]string{
+		domain.AssignmentStatusAssigned:   {domain.AssignmentStatusInProgress, domain.AssignmentStatusCancelled},
+		domain.AssignmentStatusInProgress: {domain.AssignmentStatusCompleted, domain.AssignmentStatusCancelled},
+		domain.AssignmentStatusCompleted:  {}, // No transitions from completed
+		domain.AssignmentStatusCancelled:  {}, // No transitions from cancelled
+	}
+
+	allowedTransitions, exists := validTransitions[oldStatus]
+	if !exists {
+		return false
+	}
+
+	for _, allowed := range allowedTransitions {
+		if allowed == newStatus {
+			return true
+		}
+	}
+	return false
 }

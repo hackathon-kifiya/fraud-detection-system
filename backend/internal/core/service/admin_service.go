@@ -282,6 +282,17 @@ func (s *AdminService) AssignCase(ctx context.Context, req domain.AssignCaseRequ
 		return nil, fmt.Errorf("failed to create case assignment: %w", err)
 	}
 
+	// Create audit log entry for assignment creation
+	auditLog := &domain.AuditLog{
+		FlaggedItemID: assignment.FlaggedItemID,
+		UserID:        assignedBy,
+		Action:        domain.ActionStatusChange,
+		OldStatus:     nil, // New assignment
+		NewStatus:     &assignment.Status,
+		Metadata:      fmt.Sprintf(`{"assignment_id": "%s", "auditor_id": "%s", "priority": "%s"}`, assignment.ID, assignment.AuditorID, assignment.Priority),
+	}
+	s.auditLogRepo.Create(ctx, auditLog)
+
 	return assignment, nil
 }
 
@@ -307,6 +318,17 @@ func (s *AdminService) BulkAssignCases(ctx context.Context, req domain.BulkAssig
 			continue
 		}
 
+		// Create audit log entry for each assignment
+		auditLog := &domain.AuditLog{
+			FlaggedItemID: assignment.FlaggedItemID,
+			UserID:        assignedBy,
+			Action:        domain.ActionStatusChange,
+			OldStatus:     nil, // New assignment
+			NewStatus:     &assignment.Status,
+			Metadata:      fmt.Sprintf(`{"assignment_id": "%s", "auditor_id": "%s", "priority": "%s", "bulk": true}`, assignment.ID, assignment.AuditorID, assignment.Priority),
+		}
+		s.auditLogRepo.Create(ctx, auditLog)
+
 		assignments = append(assignments, *assignment)
 	}
 
@@ -321,6 +343,86 @@ func (s *AdminService) GetUnassignedCases(ctx context.Context, limit, offset int
 // GetAuditorWorkload gets current workload per auditor
 func (s *AdminService) GetAuditorWorkload(ctx context.Context) ([]domain.AuditorWorkloadResponse, error) {
 	return s.caseAssignmentRepo.GetAuditorWorkload(ctx)
+}
+
+// GetCaseAssignments gets all case assignments with pagination and filters
+func (s *AdminService) GetCaseAssignments(ctx context.Context, limit, offset int, status, priority string) ([]domain.CaseAssignment, int64, error) {
+	return s.caseAssignmentRepo.List(ctx, limit, offset, status, priority)
+}
+
+// GetCaseAssignmentByID gets a specific case assignment by ID
+func (s *AdminService) GetCaseAssignmentByID(ctx context.Context, id string) (*domain.CaseAssignment, error) {
+	return s.caseAssignmentRepo.GetByID(ctx, id)
+}
+
+// UpdateCaseAssignment updates a case assignment
+func (s *AdminService) UpdateCaseAssignment(ctx context.Context, id string, req domain.UpdateAssignmentRequest, updatedBy string) (*domain.CaseAssignment, error) {
+	// Get existing assignment
+	assignment, err := s.caseAssignmentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("assignment not found: %w", err)
+	}
+
+	// Update fields if provided
+	if req.Status != nil {
+		assignment.Status = *req.Status
+	}
+	if req.Priority != nil {
+		assignment.Priority = *req.Priority
+	}
+	if req.DueDate != nil {
+		assignment.DueDate = req.DueDate
+	}
+	if req.Notes != nil {
+		assignment.Notes = *req.Notes
+	}
+
+	// Save updated assignment
+	err = s.caseAssignmentRepo.Update(ctx, assignment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update assignment: %w", err)
+	}
+
+	// Create audit log entry for assignment update
+	auditLog := &domain.AuditLog{
+		FlaggedItemID: assignment.FlaggedItemID,
+		UserID:        updatedBy,
+		Action:        domain.ActionStatusChange,
+		OldStatus:     nil, // We don't track old status for assignment updates
+		NewStatus:     &assignment.Status,
+		Metadata:      fmt.Sprintf(`{"assignment_id": "%s", "priority": "%s"}`, assignment.ID, assignment.Priority),
+	}
+	s.auditLogRepo.Create(ctx, auditLog)
+
+	return assignment, nil
+}
+
+// RemoveCaseAssignment removes/cancels a case assignment
+func (s *AdminService) RemoveCaseAssignment(ctx context.Context, id string, removedBy string) error {
+	// Get existing assignment for audit logging
+	assignment, err := s.caseAssignmentRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("assignment not found: %w", err)
+	}
+
+	// Delete assignment
+	err = s.caseAssignmentRepo.Delete(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to remove assignment: %w", err)
+	}
+
+	// Create audit log entry for assignment removal
+	auditLog := &domain.AuditLog{
+		FlaggedItemID: assignment.FlaggedItemID,
+		UserID:        removedBy,
+		Action:        domain.ActionStatusChange,
+		OldStatus:     &assignment.Status,
+		NewStatus:     nil, // Assignment removed
+		Metadata:      fmt.Sprintf(`{"assignment_id": "%s", "action": "removed"}`, assignment.ID),
+	}
+	s.auditLogRepo.Create(ctx, auditLog)
+
+	return nil
 }
 
 // Helper methods for report generation

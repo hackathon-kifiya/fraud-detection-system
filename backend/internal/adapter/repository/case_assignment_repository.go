@@ -153,9 +153,92 @@ func (r *CaseAssignmentRepository) GetUnassignedCases(ctx context.Context, limit
 func (r *CaseAssignmentRepository) GetAuditorWorkload(ctx context.Context) ([]domain.AuditorWorkloadResponse, error) {
 	var workloads []domain.AuditorWorkloadResponse
 
-	// This is a complex query that would need to be implemented based on specific requirements
-	// For now, return empty slice as placeholder
-	// TODO: Implement actual workload calculation query
+	// Get all auditors (users with role 'analyst')
+	var auditors []struct {
+		ID        string `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		IsActive  bool   `json:"is_active"`
+	}
+
+	err := r.db.WithContext(ctx).
+		Table("users").
+		Select("id, first_name, last_name, is_active").
+		Where("role = ? AND is_active = ?", "analyst", true).
+		Find(&auditors).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auditors: %w", err)
+	}
+
+	// Calculate workload for each auditor
+	for _, auditor := range auditors {
+		workload := domain.AuditorWorkloadResponse{
+			AuditorID:   auditor.ID,
+			AuditorName: fmt.Sprintf("%s %s", auditor.FirstName, auditor.LastName),
+			IsAvailable: auditor.IsActive,
+		}
+
+		// Count active assignments
+		var activeCount int64
+		err = r.db.WithContext(ctx).
+			Model(&domain.CaseAssignment{}).
+			Where("auditor_id = ? AND status IN (?)", auditor.ID, []string{domain.AssignmentStatusAssigned, domain.AssignmentStatusInProgress}).
+			Count(&activeCount).Error
+		if err != nil {
+			return nil, fmt.Errorf("failed to count active assignments for auditor %s: %w", auditor.ID, err)
+		}
+		workload.ActiveAssignments = activeCount
+
+		// Count completed assignments today
+		today := time.Now().Truncate(24 * time.Hour)
+		var completedToday int64
+		err = r.db.WithContext(ctx).
+			Model(&domain.CaseAssignment{}).
+			Where("auditor_id = ? AND status = ? AND updated_at >= ?", auditor.ID, domain.AssignmentStatusCompleted, today).
+			Count(&completedToday).Error
+		if err != nil {
+			return nil, fmt.Errorf("failed to count completed assignments today for auditor %s: %w", auditor.ID, err)
+		}
+		workload.CompletedToday = completedToday
+
+		// Count completed assignments this week
+		weekStart := time.Now().AddDate(0, 0, -int(time.Now().Weekday())).Truncate(24 * time.Hour)
+		var completedThisWeek int64
+		err = r.db.WithContext(ctx).
+			Model(&domain.CaseAssignment{}).
+			Where("auditor_id = ? AND status = ? AND updated_at >= ?", auditor.ID, domain.AssignmentStatusCompleted, weekStart).
+			Count(&completedThisWeek).Error
+		if err != nil {
+			return nil, fmt.Errorf("failed to count completed assignments this week for auditor %s: %w", auditor.ID, err)
+		}
+		workload.CompletedThisWeek = completedThisWeek
+
+		// Calculate average review time (simplified - using assignment duration)
+		var avgReviewTime float64
+
+		err = r.db.WithContext(ctx).
+			Model(&domain.CaseAssignment{}).
+			Select("AVG(EXTRACT(EPOCH FROM (updated_at - assigned_at))/60)").
+			Where("auditor_id = ? AND status = ? AND updated_at > assigned_at", auditor.ID, domain.AssignmentStatusCompleted).
+			Scan(&avgReviewTime).Error
+
+		if err != nil {
+			// If no completed assignments, set to 0
+			avgReviewTime = 0
+		}
+		workload.AvgReviewTime = avgReviewTime
+
+		// Calculate efficiency score (simplified: completed assignments per day)
+		daysSinceStart := time.Since(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24
+		if daysSinceStart > 0 {
+			workload.Efficiency = float64(completedThisWeek) / 7.0 // assignments per day this week
+		} else {
+			workload.Efficiency = 0
+		}
+
+		workloads = append(workloads, workload)
+	}
 
 	return workloads, nil
 }

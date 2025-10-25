@@ -72,7 +72,7 @@ func main() {
 	jwtSecret := "your-secret-key" // In production, use environment variable
 	userService := service.NewUserService(userRepo, jwtSecret)
 	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo)
-	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo)
+	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
 	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
 
 	// Initialize router
