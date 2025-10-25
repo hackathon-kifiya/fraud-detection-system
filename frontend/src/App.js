@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -58,10 +58,16 @@ const drawerWidth = 280;
 
 function AppContent() {
   const { user, logout, isAuthenticated, login } = useAuth();
+  const location = useLocation();
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [openMenus, setOpenMenus] = useState({
     fraudDetection: true,
   });
+
+  // Helper function to check if a route is active
+  const isActiveRoute = (path) => {
+    return location.pathname === path;
+  };
 
   const showSnackbar = (message, severity = 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -134,12 +140,15 @@ function AppContent() {
               <List sx={{ px: 1 }}>
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                   <ListItemButton
-                    component="a"
-                    href="/dashboard"
+                    component={Link}
+                    to="/dashboard"
                     sx={{
                       borderRadius: 1,
                       mx: 1,
-                      bgcolor: '#ff9800',
+                      bgcolor: isActiveRoute('/dashboard') ? '#ff9800' : 'transparent',
+                      '&:hover': { 
+                        bgcolor: isActiveRoute('/dashboard') ? '#ff9800' : '#616161' 
+                      },
                     }}
                   >
                     <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -191,12 +200,15 @@ function AppContent() {
                 <List component="div" disablePadding sx={{ px: 1 }}>
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      component="a"
-                      href="/transactions"
+                      component={Link}
+                      to="/transactions"
                       sx={{
                         borderRadius: 1,
                         ml: 2,
-                        '&:hover': { bgcolor: '#616161' },
+                        bgcolor: isActiveRoute('/transactions') ? '#ff9800' : 'transparent',
+                        '&:hover': { 
+                          bgcolor: isActiveRoute('/transactions') ? '#ff9800' : '#616161' 
+                        },
                       }}
                     >
                       <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -217,12 +229,15 @@ function AppContent() {
                   
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      component="a"
-                      href="/loan-requests"
+                      component={Link}
+                      to="/loan-requests"
                       sx={{
                         borderRadius: 1,
                         ml: 2,
-                        '&:hover': { bgcolor: '#616161' },
+                        bgcolor: isActiveRoute('/loan-requests') ? '#ff9800' : 'transparent',
+                        '&:hover': { 
+                          bgcolor: isActiveRoute('/loan-requests') ? '#ff9800' : '#616161' 
+                        },
                       }}
                     >
                       <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -243,12 +258,15 @@ function AppContent() {
                   
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      component="a"
-                      href="/credit-history"
+                      component={Link}
+                      to="/credit-history"
                       sx={{
                         borderRadius: 1,
                         ml: 2,
-                        '&:hover': { bgcolor: '#616161' },
+                        bgcolor: isActiveRoute('/credit-history') ? '#ff9800' : 'transparent',
+                        '&:hover': { 
+                          bgcolor: isActiveRoute('/credit-history') ? '#ff9800' : '#616161' 
+                        },
                       }}
                     >
                       <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -269,12 +287,15 @@ function AppContent() {
                   
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      component="a"
-                      href="/kyc"
+                      component={Link}
+                      to="/kyc"
                       sx={{
                         borderRadius: 1,
                         ml: 2,
-                        '&:hover': { bgcolor: '#616161' },
+                        bgcolor: isActiveRoute('/kyc') ? '#ff9800' : 'transparent',
+                        '&:hover': { 
+                          bgcolor: isActiveRoute('/kyc') ? '#ff9800' : '#616161' 
+                        },
                       }}
                     >
                       <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -295,12 +316,15 @@ function AppContent() {
                   
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      component="a"
-                      href="/repayments"
+                      component={Link}
+                      to="/repayments"
                       sx={{
                         borderRadius: 1,
                         ml: 2,
-                        '&:hover': { bgcolor: '#616161' },
+                        bgcolor: isActiveRoute('/repayments') ? '#ff9800' : 'transparent',
+                        '&:hover': { 
+                          bgcolor: isActiveRoute('/repayments') ? '#ff9800' : '#616161' 
+                        },
                       }}
                     >
                       <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -328,12 +352,15 @@ function AppContent() {
           <Box sx={{ mb: 3 }}>
             <ListItem disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
-                component="a"
-                href="/users"
+                component={Link}
+                to="/users"
                 sx={{
                   borderRadius: 1,
                   mx: 1,
-                  '&:hover': { bgcolor: '#616161' },
+                  bgcolor: isActiveRoute('/users') ? '#ff9800' : 'transparent',
+                  '&:hover': { 
+                    bgcolor: isActiveRoute('/users') ? '#ff9800' : '#616161' 
+                  },
                 }}
               >
                 <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
@@ -358,12 +385,15 @@ function AppContent() {
         <Box sx={{ mb: 3 }}>
           <ListItem disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
-              component="a"
-              href="/settings"
+              component={Link}
+              to="/settings"
               sx={{
                 borderRadius: 1,
                 mx: 1,
-                '&:hover': { bgcolor: '#616161' },
+                bgcolor: isActiveRoute('/settings') ? '#ff9800' : 'transparent',
+                '&:hover': { 
+                  bgcolor: isActiveRoute('/settings') ? '#ff9800' : '#616161' 
+                },
               }}
             >
               <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
