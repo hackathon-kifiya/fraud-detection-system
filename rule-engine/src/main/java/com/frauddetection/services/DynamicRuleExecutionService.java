@@ -29,7 +29,7 @@ public class DynamicRuleExecutionService {
 
     public EvaluationResponse evaluateFacts(EvaluationRequest request) {
         // Get active rules for the data type
-        List<Rule> activeRules = ruleRepository.findActiveRulesByDataType(request.getDataType().name());
+        List<Rule> activeRules = ruleRepository.findActiveRulesByDataType(request.getDataType());
         
         if (activeRules.isEmpty()) {
             return createEmptyResponse("No active rules found for data type: " + request.getDataType());
@@ -66,13 +66,12 @@ public class DynamicRuleExecutionService {
 
             // Calculate risk score and verdict
             double riskScore = fact.getTotalRiskScore();
-            EvaluationResponse.Verdict verdict = calculateVerdict(riskScore);
-
+            // Rule engine only calculates risk score, verdict is determined by backend
             return new EvaluationResponse(
                 fact.getEntityId(),
                 riskScore,
                 new ArrayList<>(fact.getViolations()),
-                verdict
+                EvaluationResponse.Verdict.APPROVE
             );
 
         } catch (Exception e) {
@@ -131,7 +130,7 @@ public class DynamicRuleExecutionService {
                 entityId = java.util.UUID.randomUUID().toString();
             }
             fact.setEntityId(entityId);
-            fact.setDataType(request.getDataType().name().toLowerCase());
+            fact.setDataType(request.getDataType().toLowerCase());
             
             // Copy all properties
             for (Map.Entry<String, Object> entry : factData.entrySet()) {
@@ -146,15 +145,6 @@ public class DynamicRuleExecutionService {
         return facts;
     }
 
-    private EvaluationResponse.Verdict calculateVerdict(double riskScore) {
-        if (riskScore >= 50) {
-            return EvaluationResponse.Verdict.REJECT;
-        } else if (riskScore >= 20) {
-            return EvaluationResponse.Verdict.REVIEW;
-        } else {
-            return EvaluationResponse.Verdict.APPROVE;
-        }
-    }
 
     private EvaluationResponse createEmptyResponse(String message) {
         EvaluationResponse response = new EvaluationResponse(
@@ -187,17 +177,8 @@ public class DynamicRuleExecutionService {
                 .mapToInt(r -> r.getViolations() != null ? r.getViolations().size() : 0)
                 .sum();
 
-        // Determine overall verdict based on highest risk
-        EvaluationResponse.Verdict overallVerdict = responses.stream()
-                .map(EvaluationResponse::getVerdict)
-                .max((v1, v2) -> {
-                    int score1 = v1 == EvaluationResponse.Verdict.REJECT ? 3 : 
-                                v1 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
-                    int score2 = v2 == EvaluationResponse.Verdict.REJECT ? 3 : 
-                                v2 == EvaluationResponse.Verdict.REVIEW ? 2 : 1;
-                    return Integer.compare(score1, score2);
-                })
-                .orElse(EvaluationResponse.Verdict.APPROVE);
+        // Rule engine only calculates risk score, verdict is determined by backend
+        EvaluationResponse.Verdict overallVerdict = EvaluationResponse.Verdict.APPROVE;
 
         // Create aggregated response
         EvaluationResponse aggregated = new EvaluationResponse(

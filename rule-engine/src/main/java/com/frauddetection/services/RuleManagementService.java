@@ -26,7 +26,7 @@ public class RuleManagementService {
     private RuleValidationService validationService;
 
     @Transactional
-    public Rule createRule(String name, Rule.DataType dataType, String drlContent, String createdBy) {
+    public Rule createRule(String name, String dataType, String drlContent, String createdBy) {
         // Check if rule name already exists
         if (ruleRepository.findByName(name).isPresent()) {
             throw new IllegalArgumentException("Rule with name '" + name + "' already exists");
@@ -109,16 +109,16 @@ public class RuleManagementService {
         return (List<Rule>) ruleRepository.findAll();
     }
 
-    public List<Rule> getRulesByDataType(Rule.DataType dataType) {
+    public List<Rule> getRulesByDataType(String dataType) {
         return ruleRepository.findByDataType(dataType);
     }
 
-    public List<Rule> getRulesByDataTypeAndStatus(Rule.DataType dataType, Rule.Status status) {
+    public List<Rule> getRulesByDataTypeAndStatus(String dataType, Rule.Status status) {
         return ruleRepository.findByDataTypeAndStatus(dataType, status);
     }
 
-    public List<Rule> getActiveRulesByDataType(Rule.DataType dataType) {
-        return ruleRepository.findActiveRulesByDataType(dataType.name());
+    public List<Rule> getActiveRulesByDataType(String dataType) {
+        return ruleRepository.findActiveRulesByDataType(dataType);
     }
 
     public List<Rule> getRulesByStatus(Rule.Status status) {
@@ -162,7 +162,7 @@ public class RuleManagementService {
         return ruleRepository.save(rule);
     }
 
-    public RuleValidationService.ValidationResult validateDrl(String drlContent, Rule.DataType dataType) {
+    public RuleValidationService.ValidationResult validateDrl(String drlContent, String dataType) {
         return validationService.validateDrl(drlContent, dataType);
     }
 }

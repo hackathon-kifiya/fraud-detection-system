@@ -9,7 +9,7 @@ import org.kie.api.KieServices;
 import org.kie.api.runtime.KieContainer;
 import org.springframework.stereotype.Service;
 
-import com.frauddetection.domain.Transaction;
+import com.frauddetection.domain.DynamicFact;
 
 @Service
 public class DetectionService {
@@ -27,7 +27,7 @@ public class DetectionService {
 
         int flagged = 0;
         for (Object f : facts) {
-            if (f instanceof Transaction t && !t.getViolations().isEmpty()) {
+            if (f instanceof DynamicFact fact && fact.hasViolations()) {
                 flagged++;
             }
         }
