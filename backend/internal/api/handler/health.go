@@ -7,13 +7,13 @@ import (
 )
 
 func init() {
-	r := router.Get()
-	r.GET("/health", healthHandler)
+	// Register health endpoint when router is available
+	router.RegisterHealthEndpoint()
 }
 
-func healthHandler(c *gin.Context) {
+func HealthHandler(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"status":       "ok",
-		"service-name": "",
-		"version":      "0.1.0"})
+		"service-name": "fraud-detection-backend",
+		"version":      "v0.1.0"})
 }

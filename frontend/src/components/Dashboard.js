@@ -9,7 +9,6 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  LinearProgress,
   Button,
 } from '@mui/material';
 import { 
@@ -24,7 +23,7 @@ import {
   Person,
   Payment,
 } from '@mui/icons-material';
-import { flaggedAPI, detectionAPI } from '../services/api';
+import { flaggedAPI } from '../services/api';
 
 const Dashboard = ({ onShowSnackbar }) => {
   const [stats, setStats] = useState({
@@ -37,7 +36,6 @@ const Dashboard = ({ onShowSnackbar }) => {
     recentActivity: []
   });
   const [loading, setLoading] = useState(true);
-  const [detectionStatus, setDetectionStatus] = useState('idle');
 
   const loadStats = async () => {
     try {
@@ -67,18 +65,6 @@ const Dashboard = ({ onShowSnackbar }) => {
     }
   };
 
-  const runDetection = async () => {
-    try {
-      setDetectionStatus('running');
-      await detectionAPI.trigger({ days_back: 30 });
-      onShowSnackbar('Fraud detection completed successfully', 'success');
-      await loadStats(); // Refresh stats
-    } catch (error) {
-      onShowSnackbar(`Detection failed: ${error.message}`, 'error');
-    } finally {
-      setDetectionStatus('idle');
-    }
-  };
 
   useEffect(() => {
     loadStats();
@@ -291,7 +277,7 @@ const Dashboard = ({ onShowSnackbar }) => {
                 Quick Actions
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Access sandbox environments for data upload and fraud detection analysis
+                Access fraud detection modules for different data types
               </Typography>
             </Box>
             
@@ -320,16 +306,16 @@ const Dashboard = ({ onShowSnackbar }) => {
                               <IconComponent sx={{ fontSize: 20 }} />
                             </Box>
                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#424242' }}>
-                              {type.label} Sandbox
+                              {type.label}
                             </Typography>
                           </Box>
                           <Typography variant="body2" color="text.secondary" paragraph>
-                            Upload {type.label.toLowerCase()} data and run fraud detection analysis
+                            View and manage {type.label.toLowerCase()} fraud detection
                           </Typography>
                           <Button
                             variant="outlined"
                             startIcon={<Security />}
-                            href={`/sandbox/${type.key}`}
+                            href={`/${type.key.replace('_', '-')}`}
                             sx={{ 
                               borderRadius: 2,
                               px: 3,
@@ -342,7 +328,7 @@ const Dashboard = ({ onShowSnackbar }) => {
                               }
                             }}
                           >
-                            Go to {type.label} Sandbox
+                            Go to {type.label}
                           </Button>
                         </CardContent>
                       </Card>
@@ -355,44 +341,6 @@ const Dashboard = ({ onShowSnackbar }) => {
         </Grid>
       </Grid>
 
-      {/* Action Section */}
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Paper sx={{ borderRadius: 2, boxShadow: 1, overflow: 'hidden' }}>
-            <Box sx={{ p: 3, borderBottom: '1px solid #e0e0e0' }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#424242', mb: 1 }}>
-                System Actions
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Run fraud detection analysis on all data types
-              </Typography>
-            </Box>
-            
-            <Box sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Run Full Detection
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Analyze all uploaded data for fraud patterns
-                  </Typography>
-                  
-                  {detectionStatus === 'running' && (
-                    <Box sx={{ mb: 2 }}>
-                      <LinearProgress sx={{ borderRadius: 1 }} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Running fraud detection analysis...
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-
-      </Grid>
     </Box>
   );
 };

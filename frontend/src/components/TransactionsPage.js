@@ -46,14 +46,10 @@ const TransactionsPage = ({ onShowSnackbar }) => {
     try {
       setLoading(true);
       const params = {
-        type: 'transactions',
-        page: pagination.page + 1,
         limit: pagination.rowsPerPage,
-        search: searchTerm,
-        sort_by: 'created_at',
-        sort_order: 'desc',
+        offset: pagination.page * pagination.rowsPerPage,
       };
-      const response = await flaggedAPI.getAll(params);
+      const response = await flaggedAPI.getByType('transactions', params);
       setFlaggedItems(response.data.items || []);
       setTotalItems(response.data.total || 0);
     } catch (error) {
@@ -65,7 +61,10 @@ const TransactionsPage = ({ onShowSnackbar }) => {
 
   const handleVerify = async (itemId, status) => {
     try {
-      await flaggedAPI.verify(itemId, { status });
+      await flaggedAPI.verify(itemId, { 
+        status, 
+        reviewed_by: 'current_user' // In real app, get from auth context
+      });
       onShowSnackbar(`Item marked as ${status}`, 'success');
       await loadFlaggedItems(); // Refresh the data
     } catch (error) {
@@ -264,11 +263,11 @@ const TransactionsPage = ({ onShowSnackbar }) => {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={`${item.score.toFixed(1)}`}
+                        label={`${item.risk_score?.toFixed(1) || 'N/A'}`}
                         size="small"
                         sx={{ 
-                          bgcolor: item.score >= 85 ? '#ffebee' : item.score >= 70 ? '#fff3e0' : '#e8f5e8',
-                          color: item.score >= 85 ? '#d32f2f' : item.score >= 70 ? '#f57c00' : '#388e3c',
+                          bgcolor: (item.risk_score || 0) >= 85 ? '#ffebee' : (item.risk_score || 0) >= 70 ? '#fff3e0' : '#e8f5e8',
+                          color: (item.risk_score || 0) >= 85 ? '#d32f2f' : (item.risk_score || 0) >= 70 ? '#f57c00' : '#388e3c',
                           fontWeight: 'bold'
                         }}
                         icon={<Security sx={{ fontSize: 16 }} />}

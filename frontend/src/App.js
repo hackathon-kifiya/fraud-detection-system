@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -54,10 +54,14 @@ import RepaymentsPage from './components/RepaymentsPage';
 import SandboxPage from './components/SandboxPage';
 import DataSynthesisPage from './components/DataSynthesisPage';
 import SettingsPage from './components/SettingsPage';
+import LoginPage from './components/LoginPage';
+import UserManagementPage from './components/UserManagementPage';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const drawerWidth = 280;
 
-function App() {
+function AppContent() {
+  const { user, logout, isAuthenticated, login } = useAuth();
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [openMenus, setOpenMenus] = useState({
     fraudDetection: true,
@@ -77,6 +81,10 @@ function App() {
       [menu]: !prev[menu]
     }));
   };
+
+  if (!isAuthenticated()) {
+    return <LoginPage onLogin={login} />;
+  }
 
   return (
     <Router>
@@ -376,6 +384,37 @@ function App() {
           </ListItem>
         </Box>
 
+        {/* User Management Section - Admin only */}
+        {user?.role === 'admin' && (
+          <Box sx={{ mb: 3 }}>
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                component="a"
+                href="/users"
+                sx={{
+                  borderRadius: 1,
+                  mx: 1,
+                  '&:hover': { bgcolor: '#616161' },
+                }}
+              >
+                <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+                  <GroupIcon />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="User Management" 
+                  sx={{ 
+                    color: 'white',
+                    '& .MuiListItemText-primary': {
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold'
+                    }
+                  }} 
+                />
+              </ListItemButton>
+            </ListItem>
+          </Box>
+        )}
+
         {/* Settings Section */}
         <Box sx={{ mb: 3 }}>
           <ListItem disablePadding sx={{ mb: 0.5 }}>
@@ -436,12 +475,22 @@ function App() {
                     <NotificationsIcon sx={{ color: 'black' }} />
                   </Badge>
                 </IconButton>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: '#ff9800' }}>
-                  <AccountCircleIcon />
-                </Avatar>
-                <IconButton size="small">
-                  <KeyboardArrowDownIcon sx={{ color: 'black' }} />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: '#ff9800' }}>
+                    <AccountCircleIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                      {user?.first_name} {user?.last_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {user?.role?.toUpperCase()}
+                    </Typography>
+                  </Box>
+                  <IconButton size="small" onClick={logout}>
+                    <KeyboardArrowDownIcon sx={{ color: 'black' }} />
+                  </IconButton>
+                </Box>
               </Box>
             </Toolbar>
           </AppBar>
@@ -486,6 +535,10 @@ function App() {
             path="/settings" 
             element={<SettingsPage onShowSnackbar={showSnackbar} />} 
           />
+          <Route 
+            path="/users" 
+            element={<UserManagementPage onShowSnackbar={showSnackbar} />} 
+          />
         </Routes>
           </Box>
         </Box>
@@ -506,6 +559,14 @@ function App() {
         </Snackbar>
       </Box>
     </Router>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

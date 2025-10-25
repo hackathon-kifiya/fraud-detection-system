@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8081';
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,9 +10,13 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for logging
+// Request interceptor for logging and auth
 api.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     console.log(`Making ${config.method?.toUpperCase()} request to ${config.url}`);
     return config;
   },
@@ -27,6 +31,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
@@ -60,15 +69,49 @@ export const detectionAPI = {
 
 // Flagged items endpoints
 export const flaggedAPI = {
-  getAll: (params) => api.get('/api/flagged', { params }),
-  getById: (id) => api.get(`/api/flagged/${id}`),
-  verify: (id, data) => api.post(`/api/verify/${id}`, data),
-  getStats: () => api.get('/api/flagged/stats'),
+  // Create a new flagged item
+  create: (data) => api.post('/api/flagged-items', data),
+  
+  // Get all flagged items with pagination and filters
+  getAll: (params) => api.get('/api/flagged-items', { params }),
+  
+  // Get flagged item by ID
+  getById: (id) => api.get(`/api/flagged-items/${id}`),
+  
+  // Update flagged item
+  update: (id, data) => api.put(`/api/flagged-items/${id}`, data),
+  
+  // Delete flagged item
+  delete: (id) => api.delete(`/api/flagged-items/${id}`),
+  
+  // Verify flagged item (confirm or mark as false positive)
+  verify: (id, data) => api.post(`/api/flagged-items/${id}/verify`, data),
+  
+  // Get statistics
+  getStats: () => api.get('/api/flagged-items/stats'),
+  
+  // Get flagged items by type
+  getByType: (type, params) => api.get(`/api/flagged-items/type/${type}`, { params }),
 };
 
 // Health check
 export const healthAPI = {
   check: () => api.get('/health'),
 };
+
+// User management endpoints
+export const userAPI = {
+  // Authentication
+  register: (userData) => api.post('/api/auth/register', userData),
+  login: (credentials) => api.post('/api/auth/login', credentials),
+  
+  // User management
+  getUsers: (params) => api.get('/api/users', { params }),
+  getUser: (id) => api.get(`/api/users/${id}`),
+  updateUser: (id, userData) => api.put(`/api/users/${id}`, userData),
+  deleteUser: (id) => api.delete(`/api/users/${id}`),
+  changePassword: (id, passwordData) => api.post(`/api/users/${id}/change-password`, passwordData),
+};
+
 
 export default api;

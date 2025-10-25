@@ -46,14 +46,10 @@ const RepaymentsPage = ({ onShowSnackbar }) => {
     try {
       setLoading(true);
       const params = {
-        type: 'repayments',
-        page: pagination.page + 1,
         limit: pagination.rowsPerPage,
-        search: searchTerm,
-        sort_by: 'created_at',
-        sort_order: 'desc',
+        offset: pagination.page * pagination.rowsPerPage,
       };
-      const response = await flaggedAPI.getAll(params);
+      const response = await flaggedAPI.getByType('repayments', params);
       setFlaggedItems(response.data.items || []);
       setTotalItems(response.data.total || 0);
     } catch (error) {
@@ -65,7 +61,10 @@ const RepaymentsPage = ({ onShowSnackbar }) => {
 
   const handleVerify = async (itemId, status) => {
     try {
-      await flaggedAPI.verify(itemId, { status });
+      await flaggedAPI.verify(itemId, { 
+        status, 
+        reviewed_by: 'current_user' // In real app, get from auth context
+      });
       onShowSnackbar(`Item marked as ${status}`, 'success');
       await loadFlaggedItems();
     } catch (error) {
@@ -158,7 +157,7 @@ const RepaymentsPage = ({ onShowSnackbar }) => {
                 <Grid item xs={6} md={3}>
                   <Paper sx={{ p: 2, textAlign: 'center', borderRadius: 2, boxShadow: 1 }}>
                     <Typography variant="h4" color="error" sx={{ fontWeight: 'bold' }}>
-                      {flaggedItems.filter(item => item.score >= 85).length}
+                      {flaggedItems.filter(item => (item.risk_score || 0) >= 85).length}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       High Risk
@@ -264,11 +263,11 @@ const RepaymentsPage = ({ onShowSnackbar }) => {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={`${item.score.toFixed(1)}`}
+                        label={`${item.risk_score?.toFixed(1) || 'N/A'}`}
                         size="small"
                         sx={{ 
-                          bgcolor: item.score >= 85 ? '#ffebee' : item.score >= 70 ? '#fff3e0' : '#e8f5e8',
-                          color: item.score >= 85 ? '#d32f2f' : item.score >= 70 ? '#f57c00' : '#388e3c',
+                          bgcolor: (item.risk_score || 0) >= 85 ? '#ffebee' : (item.risk_score || 0) >= 70 ? '#fff3e0' : '#e8f5e8',
+                          color: (item.risk_score || 0) >= 85 ? '#d32f2f' : (item.risk_score || 0) >= 70 ? '#f57c00' : '#388e3c',
                           fontWeight: 'bold'
                         }}
                         icon={<Security sx={{ fontSize: 16 }} />}
