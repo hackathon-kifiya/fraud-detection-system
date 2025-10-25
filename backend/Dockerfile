@@ -30,4 +30,4 @@ USER frauduser
 
 EXPOSE 8080
 
-CMD ["./main"]
+CMD ["sh", "-c", "./main -db=\"$DATABASE_URL\""]
