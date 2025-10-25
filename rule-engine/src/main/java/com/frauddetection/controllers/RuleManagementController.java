@@ -51,18 +51,18 @@ public class RuleManagementController {
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllRules(
-            @RequestParam(required = false) String dataType,
-            @RequestParam(required = false) String status) {
+            @RequestParam(value = "dataType", required = false) String dataType,
+            @RequestParam(value = "status", required = false) String status) {
         
         List<Rule> rules;
         
         if (dataType != null && status != null) {
             rules = ruleManagementService.getRulesByDataTypeAndStatus(
-                Rule.DataType.valueOf(dataType.toUpperCase()),
+                dataType,
                 Rule.Status.valueOf(status.toUpperCase())
             );
         } else if (dataType != null) {
-            rules = ruleManagementService.getRulesByDataType(Rule.DataType.valueOf(dataType.toUpperCase()));
+            rules = ruleManagementService.getRulesByDataType(dataType);
         } else if (status != null) {
             rules = ruleManagementService.getRulesByStatus(Rule.Status.valueOf(status.toUpperCase()));
         } else {
@@ -234,53 +234,29 @@ public class RuleManagementController {
     }
 
     // Request DTOs
+    @lombok.Data
     public static class CreateRuleRequest {
         private String name;
-        private Rule.DataType dataType;
+        private String dataType;
         private String drlContent;
         private String createdBy;
-
-        // Getters and Setters
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        public Rule.DataType getDataType() { return dataType; }
-        public void setDataType(Rule.DataType dataType) { this.dataType = dataType; }
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public String getCreatedBy() { return createdBy; }
-        public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     }
 
+    @lombok.Data
     public static class UpdateRuleRequest {
         private String drlContent;
         private String changeDescription;
         private String updatedBy;
-
-        // Getters and Setters
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public String getChangeDescription() { return changeDescription; }
-        public void setChangeDescription(String changeDescription) { this.changeDescription = changeDescription; }
-        public String getUpdatedBy() { return updatedBy; }
-        public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
     }
 
+    @lombok.Data
     public static class ValidateDrlRequest {
         private String drlContent;
-        private Rule.DataType dataType;
-
-        // Getters and Setters
-        public String getDrlContent() { return drlContent; }
-        public void setDrlContent(String drlContent) { this.drlContent = drlContent; }
-        public Rule.DataType getDataType() { return dataType; }
-        public void setDataType(Rule.DataType dataType) { this.dataType = dataType; }
+        private String dataType;
     }
 
+    @lombok.Data
     public static class RollbackRequest {
         private String rolledBackBy;
-
-        // Getters and Setters
-        public String getRolledBackBy() { return rolledBackBy; }
-        public void setRolledBackBy(String rolledBackBy) { this.rolledBackBy = rolledBackBy; }
     }
 }

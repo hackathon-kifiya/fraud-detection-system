@@ -88,8 +88,53 @@ MAX - A fraud detection system for embedded finance.
 https://docs.google.com/spreadsheets/d/1YFAoreEE3M_yJxrjLkx92qoIPFh0YinAQshdZ5iMICQ/edit?usp=sharing
 
 
-## components
+## Components
 
+### Rule Engine (Java/Spring Boot)
+- **Dynamic Data Types**: Support for any data type (transaction, kyc, loan, credit, repayment, custom types)
+- **DRL Rules**: Drools-based rule engine with configurable rules
+- **API**: RESTful API for rule evaluation and management
+- **Database**: PostgreSQL for rule storage and versioning
+
+### Backend (Go/Gin)
+- **Rule Integration**: Seamless integration with rule engine
+- **Flagged Items**: Automatic creation of flagged items from rule violations
+- **API**: RESTful API for data evaluation and management
+- **Authentication**: JWT-based user authentication
+
+### Frontend (React)
+- **Dashboard**: Real-time fraud detection dashboard
+- **Rule Management**: Interface for creating and managing rules
+- **Flagged Items**: Review and management of flagged items
+- **Analytics**: Performance metrics and reporting
+
+## Rule Engine Integration
+
+The system now features a fully dynamic rule engine that supports:
+
+- **Any Data Type**: Create rules for any data type without code changes
+- **DRL Rules**: Write rules in Drools Rule Language (DRL)
+- **Real-time Evaluation**: Evaluate data against rules in real-time
+- **Flagged Item Creation**: Automatically create flagged items for violations
+
+See [RULE_ENGINE_INTEGRATION.md](./RULE_ENGINE_INTEGRATION.md) for detailed integration documentation.
+
+## Quick Start
+
+1. **Start Services**:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Test Integration**:
+   ```bash
+   ./test-rule-engine-integration.sh
+   ```
+
+3. **Access Services**:
+   - Frontend: http://localhost:3001
+   - Backend API: http://localhost:8081
+   - Rule Engine API: http://localhost:8082
 
 ## v2
 

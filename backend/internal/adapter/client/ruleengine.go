@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -47,58 +48,43 @@ type Violation struct {
 	Description string `json:"description"`
 }
 
-// EvaluateTransaction evaluates transaction data against rules
-func (c *RuleEngineClient) EvaluateTransaction(facts []map[string]interface{}) (*EvaluationResponse, error) {
-	req := EvaluationRequest{
-		DataType: "transaction",
-		Facts:    facts,
-	}
-	return c.evaluate("/api/evaluate/transaction", req)
-}
-
-// EvaluateKYC evaluates KYC data against rules
-func (c *RuleEngineClient) EvaluateKYC(facts []map[string]interface{}) (*EvaluationResponse, error) {
-	req := EvaluationRequest{
-		DataType: "kyc",
-		Facts:    facts,
-	}
-	return c.evaluate("/api/evaluate/kyc", req)
-}
-
-// EvaluateLoan evaluates loan data against rules
-func (c *RuleEngineClient) EvaluateLoan(facts []map[string]interface{}) (*EvaluationResponse, error) {
-	req := EvaluationRequest{
-		DataType: "loan",
-		Facts:    facts,
-	}
-	return c.evaluate("/api/evaluate/loan", req)
-}
-
-// EvaluateCredit evaluates credit data against rules
-func (c *RuleEngineClient) EvaluateCredit(facts []map[string]interface{}) (*EvaluationResponse, error) {
-	req := EvaluationRequest{
-		DataType: "credit",
-		Facts:    facts,
-	}
-	return c.evaluate("/api/evaluate/credit", req)
-}
-
-// EvaluateRepayment evaluates repayment data against rules
-func (c *RuleEngineClient) EvaluateRepayment(facts []map[string]interface{}) (*EvaluationResponse, error) {
-	req := EvaluationRequest{
-		DataType: "repayment",
-		Facts:    facts,
-	}
-	return c.evaluate("/api/evaluate/repayment", req)
-}
-
-// EvaluateGeneric evaluates any data type against rules
-func (c *RuleEngineClient) EvaluateGeneric(dataType string, facts []map[string]interface{}) (*EvaluationResponse, error) {
+// Evaluate evaluates any data type against rules using the new dynamic API
+func (c *RuleEngineClient) Evaluate(dataType string, facts []map[string]interface{}) (*EvaluationResponse, error) {
 	req := EvaluationRequest{
 		DataType: dataType,
 		Facts:    facts,
 	}
-	return c.evaluate("/api/evaluate/generic", req)
+	return c.evaluate("/evaluate", req)
+}
+
+// EvaluateTransaction evaluates transaction data against rules
+func (c *RuleEngineClient) EvaluateTransaction(facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate("transaction", facts)
+}
+
+// EvaluateKYC evaluates KYC data against rules
+func (c *RuleEngineClient) EvaluateKYC(facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate("kyc", facts)
+}
+
+// EvaluateLoan evaluates loan data against rules
+func (c *RuleEngineClient) EvaluateLoan(facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate("loan", facts)
+}
+
+// EvaluateCredit evaluates credit data against rules
+func (c *RuleEngineClient) EvaluateCredit(facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate("credit", facts)
+}
+
+// EvaluateRepayment evaluates repayment data against rules
+func (c *RuleEngineClient) EvaluateRepayment(facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate("repayment", facts)
+}
+
+// EvaluateGeneric evaluates any data type against rules (deprecated, use Evaluate)
+func (c *RuleEngineClient) EvaluateGeneric(dataType string, facts []map[string]interface{}) (*EvaluationResponse, error) {
+	return c.Evaluate(dataType, facts)
 }
 
 // evaluate makes a generic evaluation request
@@ -148,9 +134,44 @@ func (c *RuleEngineClient) evaluate(endpoint string, req EvaluationRequest) (*Ev
 	return &result.Response, nil
 }
 
+// makeRequest is a generic method for making HTTP requests
+func (c *RuleEngineClient) makeRequest(method, endpoint string, req interface{}, resp interface{}) error {
+	url := c.baseURL + endpoint
+
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("rule engine returned status %d", httpResp.StatusCode)
+	}
+
+	if err := json.NewDecoder(httpResp.Body).Decode(resp); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
+
 // HealthCheck checks if the rule engine is healthy
 func (c *RuleEngineClient) HealthCheck() error {
-	url := c.baseURL + "/health"
+	// Remove /api from baseURL for health check since it's at root level
+	baseURL := strings.TrimSuffix(c.baseURL, "/api")
+	url := baseURL + "/health"
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to check health: %w", err)
@@ -162,4 +183,33 @@ func (c *RuleEngineClient) HealthCheck() error {
 	}
 
 	return nil
+}
+
+// ValidationRequest represents a request to validate DRL content
+type ValidationRequest struct {
+	DrlContent string `json:"drlContent"`
+	DataType   string `json:"dataType"`
+}
+
+// ValidationResponse represents the response from rule validation
+type ValidationResponse struct {
+	Valid    bool     `json:"valid"`
+	Errors   []string `json:"errors"`
+	Warnings []string `json:"warnings"`
+}
+
+// ValidateRule validates DRL content against a data type
+func (c *RuleEngineClient) ValidateRule(drlContent, dataType string) (*ValidationResponse, error) {
+	req := ValidationRequest{
+		DrlContent: drlContent,
+		DataType:   dataType,
+	}
+
+	var response ValidationResponse
+	err := c.makeRequest("POST", "/rules/validate", req, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate rule: %w", err)
+	}
+
+	return &response, nil
 }

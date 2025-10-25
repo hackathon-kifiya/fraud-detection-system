@@ -1,10 +1,10 @@
 package rules;
 
-import com.frauddetection.domain.CreditHistory;
+import com.frauddetection.domain.DynamicFact;
 
 rule "Low credit score"
 when
-    $c: CreditHistory( creditScore < 500 )
+    $c: DynamicFact( dataType == "credit", getIntProperty("creditScore") < 500 )
 then
     $c.addViolation("CREDIT_LOW_SCORE", 20, "Low credit score");
 end

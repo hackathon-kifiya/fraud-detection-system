@@ -1,0 +1,43 @@
+package rules;
+
+import com.frauddetection.domain.DynamicFact;
+
+// Example rules for custom data types
+// These demonstrate how to create rules for any data type
+
+rule "High value custom transaction"
+when
+    $f: DynamicFact( 
+        dataType in ("payment", "transfer", "withdrawal"), 
+        getDoubleProperty("amount") > 5000 
+    )
+then
+    $f.addViolation("HIGH_VALUE", 20, "High value transaction detected");
+end
+
+rule "Suspicious frequency"
+when
+    $f: DynamicFact( 
+        getIntProperty("frequency") > 10 
+    )
+then
+    $f.addViolation("HIGH_FREQUENCY", 15, "Unusually high frequency detected");
+end
+
+rule "Invalid status"
+when
+    $f: DynamicFact( 
+        getStringProperty("status") not in ("active", "pending", "completed", "cancelled")
+    )
+then
+    $f.addViolation("INVALID_STATUS", 10, "Invalid status value");
+end
+
+rule "Missing required field"
+when
+    $f: DynamicFact( 
+        getProperty("userId") == null || getProperty("amount") == null
+    )
+then
+    $f.addViolation("MISSING_FIELD", 25, "Required field missing");
+end
