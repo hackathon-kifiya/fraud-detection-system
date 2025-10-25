@@ -11,5 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class RuleResponseDto {
+public class AllRulesCountResponse {
+    private Integer count;
 }

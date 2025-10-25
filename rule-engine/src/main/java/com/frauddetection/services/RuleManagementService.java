@@ -3,14 +3,17 @@ package com.frauddetection.services;
 import com.frauddetection.domain.Rule;
 import com.frauddetection.domain.ValidationResult;
 import com.frauddetection.dto.RuleRequestDto;
+import com.frauddetection.dto.RuleResponseDto;
 import com.frauddetection.mapper.RuleMapper;
 import com.frauddetection.repository.RuleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -25,6 +28,10 @@ public class RuleManagementService {
     @Autowired
     private RuleMapper ruleMapper;
 
+    public Optional<RuleResponseDto> getRuleById(UUID id) {
+        return Optional.ofNullable(ruleMapper.toDto(ruleRepository.findById(id).get()));
+    }
+
     @Transactional
     public Rule createRule(RuleRequestDto request) {
         ValidationResult validation = validationService.validateDrl(request.getDrlContent(), request.getDataType());
@@ -38,7 +45,7 @@ public class RuleManagementService {
     }
 
     @Transactional
-    public Rule updateRule(UUID ruleId, String name, String description, String dataType, String drlContent, String changeDescription, String updatedBy) {
+    public Rule updateRule(UUID ruleId, String name, String description, String dataType, String drlContent, String updatedBy) {
         Rule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new IllegalArgumentException("Rule not found with id: " + ruleId));
 
@@ -159,7 +166,7 @@ public class RuleManagementService {
         }
     }
 
-    public List<Rule> searchRulesWithPagination(String search, String dataType, String status, Integer limit, Integer offset) {
+    public Page<Rule> searchRulesWithPagination(String search, String dataType, String status, Integer limit, Integer offset) {
         // Set default values
         int limitValue = limit != null ? limit : 100;
         int offsetValue = offset != null ? offset : 0;
