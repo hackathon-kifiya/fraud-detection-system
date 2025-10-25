@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  risk-aggregator:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: risk-aggregator
+    ports:
+      - "8003:8003"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - PORT=8003
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fraud_detection
+      - ANOMALY_DETECTION_URL=http://anomaly-detection:8002
+      - JAVA_ENGINE_URL=http://java-engine:8080
+      - BACKEND_URL=http://backend:8000
+      - RATE_LIMIT_ENABLED=True
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=60
+      - CACHE_ENABLED=True
+      - CACHE_TTL=300
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+    depends_on:
+      - postgres
+    networks:
+      - fraud-detection-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: risk-aggregator-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=fraud_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - fraud-detection-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+
+networks:
+  fraud-detection-network:
+    external: true
+
