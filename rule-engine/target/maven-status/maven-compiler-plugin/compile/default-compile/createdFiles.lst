@@ -12,6 +12,7 @@ com/frauddetection/controllers/RuleManagementController$CreateRuleRequest.class
 com/frauddetection/repository/RuleRepository.class
 com/frauddetection/domain/EvaluationResponse.class
 com/frauddetection/controllers/RuleManagementController$RollbackRequest.class
+com/frauddetection/controllers/RuleEvaluationController.class
 com/frauddetection/services/RuleManagementService.class
 com/frauddetection/services/DetectionService.class
 com/frauddetection/config/DroolsConfig.class

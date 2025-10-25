@@ -10,6 +10,7 @@ import java.util.UUID;
 public class Rule {
     private UUID id;
     private String name;
+    private String description;
     private String dataType;
     private String drlContent;
     private Integer version;
@@ -17,14 +18,16 @@ public class Rule {
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;
+    private String updatedBy;
 
     public enum Status {
         ACTIVE, INACTIVE, DRAFT
     }
 
     // Constructor for creating new rules
-    public Rule(String name, String dataType, String drlContent, String createdBy) {
+    public Rule(String name, String description, String dataType, String drlContent, String createdBy) {
         this.name = name;
+        this.description = description;
         this.dataType = dataType;
         this.drlContent = drlContent;
         this.createdBy = createdBy;

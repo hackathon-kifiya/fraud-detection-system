@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:4000";
+  process.env.REACT_APP_BACKEND_URL || "http://localhost";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -256,6 +256,33 @@ export const riskAggregationAPI = {
   // Risk scoring
   calculateRiskScore: (data) => api.post("/api/risk/calculate", data),
   getRiskHistory: (params) => api.get("/api/risk/history", { params }),
+};
+
+// Anomaly Detection endpoints
+export const anomalyDetectionAPI = {
+  // Anomaly detection
+  detectAnomalies: (data) => api.post("/api/anomaly/detect", data),
+  getAnomalyStats: () => api.get("/api/anomaly/stats"),
+  getAnomalyHistory: (params) => api.get("/api/anomaly/history", { params }),
+  
+  // Model management
+  getModelStatus: () => api.get("/api/anomaly/model/status"),
+  retrainModel: (data) => api.post("/api/anomaly/model/retrain", data),
+  getModelMetrics: () => api.get("/api/anomaly/model/metrics"),
+};
+
+// Prediction Engine endpoints
+export const predictionAPI = {
+  // Fraud prediction
+  predictFraud: (data) => api.post("/api/predict/fraud", data),
+  getPredictionStats: () => api.get("/api/predict/stats"),
+  getPredictionHistory: (params) => api.get("/api/predict/history", { params }),
+  
+  // Model management
+  getModelStatus: () => api.get("/api/predict/model/status"),
+  retrainModel: (data) => api.post("/api/predict/model/retrain", data),
+  getModelMetrics: () => api.get("/api/predict/model/metrics"),
+  getFeatureImportance: () => api.get("/api/predict/features/importance"),
 };
 
 export default api;

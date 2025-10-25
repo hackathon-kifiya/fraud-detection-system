@@ -71,7 +71,7 @@ public class DynamicRuleExecutionService {
                 fact.getEntityId(),
                 riskScore,
                 new ArrayList<>(fact.getViolations()),
-                EvaluationResponse.Verdict.APPROVE
+                EvaluationResponse.Verdict.PASS
             );
 
         } catch (Exception e) {
@@ -122,15 +122,13 @@ public class DynamicRuleExecutionService {
         List<DynamicFact> facts = new ArrayList<>();
         
         for (Map<String, Object> factData : request.getFacts()) {
-            DynamicFact fact = new DynamicFact();
-            
             // Extract entity ID if present
             String entityId = (String) factData.get("entityId");
             if (entityId == null) {
                 entityId = java.util.UUID.randomUUID().toString();
             }
-            fact.setEntityId(entityId);
-            fact.setDataType(request.getDataType().toLowerCase());
+            
+            DynamicFact fact = new DynamicFact(entityId, request.getDataType().toLowerCase());
             
             // Copy all properties
             for (Map.Entry<String, Object> entry : factData.entrySet()) {
@@ -151,7 +149,7 @@ public class DynamicRuleExecutionService {
             "unknown",
             0.0,
             new ArrayList<>(),
-            EvaluationResponse.Verdict.APPROVE
+            EvaluationResponse.Verdict.PASS
         );
         
         Map<String, Object> metadata = new HashMap<>();
@@ -178,7 +176,7 @@ public class DynamicRuleExecutionService {
                 .sum();
 
         // Rule engine only calculates risk score, verdict is determined by backend
-        EvaluationResponse.Verdict overallVerdict = EvaluationResponse.Verdict.APPROVE;
+        EvaluationResponse.Verdict overallVerdict = EvaluationResponse.Verdict.PASS;
 
         // Create aggregated response
         EvaluationResponse aggregated = new EvaluationResponse(

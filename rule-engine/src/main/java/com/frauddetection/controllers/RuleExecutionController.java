@@ -25,7 +25,7 @@ public class RuleExecutionController {
             
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
-            result.put("response", response);
+            result.put("data", response);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();

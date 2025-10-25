@@ -17,7 +17,7 @@ public class EvaluationResponse {
     private Map<String, Object> metadata;
 
     public enum Verdict {
-        APPROVE, REVIEW, REJECT
+        PASS, REVIEW, FAIL
     }
 
     // Constructor without metadata

@@ -39,4 +39,45 @@ public interface RuleRepository extends CrudRepository<Rule, UUID> {
     
     // Find rules by created by
     List<Rule> findByCreatedBy(String createdBy);
+    
+    // Search rules by name or description
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) ORDER BY created_at DESC")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCase(@Param("search") String search);
+    
+    // Search rules by name or description with data type filter
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType ORDER BY created_at DESC")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataType(@Param("search") String search, @Param("dataType") String dataType);
+    
+    // Search rules by name or description with status filter
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND status = :status ORDER BY created_at DESC")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndStatus(@Param("search") String search, @Param("status") String status);
+    
+    // Search rules by name or description with both data type and status filter
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType AND status = :status ORDER BY created_at DESC")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatus(@Param("search") String search, @Param("dataType") String dataType, @Param("status") String status);
+    
+    // Paginated queries
+    @Query("SELECT * FROM rule ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findAllOrderByCreatedAtWithPagination(@Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE data_type = :dataType ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByDataTypeWithPagination(@Param("dataType") String dataType, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByStatusWithPagination(@Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE data_type = :dataType AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByDataTypeAndStatusWithPagination(@Param("dataType") String dataType, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseWithPagination(@Param("search") String search, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeWithPagination(@Param("search") String search, @Param("dataType") String dataType, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndStatusWithPagination(@Param("search") String search, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
+    
+    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatusWithPagination(@Param("search") String search, @Param("dataType") String dataType, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
 }

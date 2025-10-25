@@ -4,6 +4,7 @@ import com.frauddetection.domain.Rule;
 import com.frauddetection.domain.RuleVersion;
 import com.frauddetection.services.RuleManagementService;
 import com.frauddetection.services.RuleValidationService;
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public class RuleManagementController {
         try {
             Rule rule = ruleManagementService.createRule(
                 request.getName(),
+                request.getDescription(),
                 request.getDataType(),
                 request.getDrlContent(),
                 request.getCreatedBy()
@@ -52,21 +54,18 @@ public class RuleManagementController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllRules(
             @RequestParam(value = "dataType", required = false) String dataType,
-            @RequestParam(value = "status", required = false) String status) {
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "limit", required = false) Integer limit,
+            @RequestParam(value = "offset", required = false) Integer offset) {
         
         List<Rule> rules;
         
-        if (dataType != null && status != null) {
-            rules = ruleManagementService.getRulesByDataTypeAndStatus(
-                dataType,
-                Rule.Status.valueOf(status.toUpperCase())
-            );
-        } else if (dataType != null) {
-            rules = ruleManagementService.getRulesByDataType(dataType);
-        } else if (status != null) {
-            rules = ruleManagementService.getRulesByStatus(Rule.Status.valueOf(status.toUpperCase()));
+        // Use pagination if limit is provided
+        if (limit != null) {
+            rules = ruleManagementService.searchRulesWithPagination(search, dataType, status, limit, offset);
         } else {
-            rules = ruleManagementService.getAllRules();
+            rules = ruleManagementService.searchRules(search, dataType, status, limit, offset);
         }
 
         Map<String, Object> response = new HashMap<>();
@@ -93,12 +92,27 @@ public class RuleManagementController {
             @PathVariable UUID id,
             @RequestBody UpdateRuleRequest request) {
         try {
-            Rule rule = ruleManagementService.updateRule(
-                id,
-                request.getDrlContent(),
-                request.getChangeDescription(),
-                request.getUpdatedBy()
-            );
+            Rule rule;
+            
+            // Check if this is a full update (with name, description, dataType) or just DRL update
+            if (request.getName() != null && request.getDescription() != null && request.getDataType() != null) {
+                rule = ruleManagementService.updateRule(
+                    id,
+                    request.getName(),
+                    request.getDescription(),
+                    request.getDataType(),
+                    request.getDrlContent(),
+                    request.getChangeDescription(),
+                    request.getUpdatedBy()
+                );
+            } else {
+                rule = ruleManagementService.updateRule(
+                    id,
+                    request.getDrlContent(),
+                    request.getChangeDescription(),
+                    request.getUpdatedBy()
+                );
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -234,28 +248,32 @@ public class RuleManagementController {
     }
 
     // Request DTOs
-    @lombok.Data
+    @Data
     public static class CreateRuleRequest {
         private String name;
+        private String description;
         private String dataType;
         private String drlContent;
         private String createdBy;
     }
 
-    @lombok.Data
+    @Data
     public static class UpdateRuleRequest {
+        private String name;
+        private String description;
+        private String dataType;
         private String drlContent;
         private String changeDescription;
         private String updatedBy;
     }
 
-    @lombok.Data
+    @Data
     public static class ValidateDrlRequest {
         private String drlContent;
         private String dataType;
     }
 
-    @lombok.Data
+    @Data
     public static class RollbackRequest {
         private String rolledBackBy;
     }
