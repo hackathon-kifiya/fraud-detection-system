@@ -70,16 +70,6 @@ services:
       - backend
     restart: unless-stopped
 
-  lab-portal:
-    build: 
-      context: ./lab-portal
-      args:
-        - REACT_APP_BACKEND_URL=http://localhost:8081
-    ports:
-      - "3002:3000"
-    depends_on:
-      - backend
-    restart: unless-stopped
 
 volumes:
   postgres_data:

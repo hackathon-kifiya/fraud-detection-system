@@ -24,10 +24,9 @@ func (User) TableName() string {
 
 // UserRole constants
 const (
-	RoleAdmin     = "admin"
-	RoleAnalyst   = "analyst"
-	RoleViewer    = "viewer"
-	RoleLabTechie = "lab_techie"
+	RoleAdmin   = "admin"
+	RoleAnalyst = "analyst"
+	RoleViewer  = "viewer"
 )
 
 // CreateUserRequest represents the request to create a new user
@@ -36,14 +35,14 @@ type CreateUserRequest struct {
 	Password  string `json:"password" binding:"required,min=8"`
 	FirstName string `json:"first_name" binding:"required"`
 	LastName  string `json:"last_name" binding:"required"`
-	Role      string `json:"role" binding:"required,oneof=admin analyst viewer lab_techie"`
+	Role      string `json:"role" binding:"required,oneof=admin analyst viewer"`
 }
 
 // UpdateUserRequest represents the request to update a user
 type UpdateUserRequest struct {
 	FirstName *string `json:"first_name,omitempty"`
 	LastName  *string `json:"last_name,omitempty"`
-	Role      *string `json:"role,omitempty" binding:"oneof=admin analyst viewer lab_techie"`
+	Role      *string `json:"role,omitempty" binding:"oneof=admin analyst viewer"`
 	IsActive  *bool   `json:"is_active,omitempty"`
 }
 
