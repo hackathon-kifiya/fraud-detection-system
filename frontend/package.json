@@ -3,17 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "axios": "^1.6.0",
-    "@mui/material": "^5.14.0",
-    "@mui/icons-material": "^5.14.0",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@mui/icons-material": "^5.14.0",
+    "@mui/material": "^5.14.0",
+    "axios": "^1.6.0",
     "chart.js": "^4.4.0",
+    "date-fns": "^4.1.0",
+    "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
-    "react-router-dom": "^6.8.0"
+    "react-dom": "^18.2.0",
+    "react-json-view": "^1.21.3",
+    "react-router-dom": "^6.8.0",
+    "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -39,5 +42,11 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://backend:8080"
+  "proxy": "http://backend:8080",
+  "overrides": {
+    "react-json-view": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
+  }
 }
