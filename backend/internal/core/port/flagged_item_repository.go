@@ -32,3 +32,4 @@ type FlaggedItemRepository interface {
 	// UpdateStatus updates the status of a flagged item
 	UpdateStatus(ctx context.Context, id, status, reviewedBy string) error
 }
+
