@@ -61,11 +61,19 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	flaggedItemRepo := repository.NewFlaggedItemRepository(db)
+	auditNoteRepo := repository.NewAuditNoteRepository(db)
+	auditLogRepo := repository.NewAuditLogRepository(db)
+	systemConfigRepo := repository.NewSystemConfigRepository(db)
+	caseAssignmentRepo := repository.NewCaseAssignmentRepository(db)
+	performanceReportRepo := repository.NewPerformanceReportRepository(db)
+	kpiMetricsRepo := repository.NewKPIMetricsRepository(db)
 
 	// Initialize services
 	jwtSecret := "your-secret-key" // In production, use environment variable
 	userService := service.NewUserService(userRepo, jwtSecret)
 	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo)
+	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo)
+	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
 
 	// Initialize router
 	r := router.Init()
@@ -76,6 +84,8 @@ func main() {
 	// Initialize handlers
 	handler.InitUserHandler(userService, r)
 	handler.InitFlaggedItemHandler(flaggedItemService, r)
+	handler.InitAuditHandler(auditService, r)
+	handler.InitAdminHandler(adminService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

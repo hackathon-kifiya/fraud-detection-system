@@ -11,14 +11,13 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U frauduser -d frauddb"]
       interval: 10s
       timeout: 5s
       retries: 5
-  python-stats:
-    build: ./python-stats
+  anomaly-detection-engine:
+    build: ./anomaly-detection-engine
     ports:
       - "5001:5001"
     environment:
@@ -28,8 +27,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  java-engine:
-    build: ./java-engine
+  rule-engine:
+    build: ./rule-engine
     ports:
       - "8082:8081"
     environment:
@@ -45,21 +44,22 @@ services:
       - "8081:8080"
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
-      - ENGINE_URL=http://java-engine:8081/api
-      - PYTHON_STATS_URL=http://python-stats:5001
+      - ENGINE_URL=http://rule-engine:8081/api
+      - PYTHON_STATS_URL=http://anomaly-detection-engine:5001
     depends_on:
       postgres:
         condition: service_healthy
-      java-engine:
+      rule-engine:
         condition: service_started
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      args:
+        - REACT_APP_BACKEND_URL=http://localhost:8081
     ports:
       - "3001:3000"
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8081
     depends_on:
       - backend
     restart: unless-stopped
