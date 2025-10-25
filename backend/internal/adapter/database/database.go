@@ -43,6 +43,8 @@ func AutoMigrate(db *gorm.DB) error {
 	err := db.AutoMigrate(
 		&domain.User{},
 		&domain.FlaggedItem{},
+		&domain.AuditNote{},
+		&domain.AuditLog{},
 	)
 
 	if err != nil {

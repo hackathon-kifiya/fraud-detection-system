@@ -178,3 +178,68 @@ func (r *FlaggedItemRepository) UpdateStatus(ctx context.Context, id, status, re
 	}
 	return nil
 }
+
+// GetWithOriginalData retrieves a flagged item with original data based on type
+func (r *FlaggedItemRepository) GetWithOriginalData(ctx context.Context, id, itemType string) (*domain.FlaggedItem, interface{}, error) {
+	// First get the flagged item
+	item, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// For now, we'll return the item with original data as nil
+	// In a real implementation, this would query the appropriate table based on itemType
+	// and use the DataID to fetch the original record
+	var originalData interface{}
+
+	// TODO: Implement actual data fetching based on itemType and DataID
+	// This would involve querying tables like transactions, loan_requests, etc.
+	// based on the itemType field and using the DataID to join
+
+	return item, originalData, nil
+}
+
+// GetByReviewedBy retrieves flagged items reviewed by a specific user
+func (r *FlaggedItemRepository) GetByReviewedBy(ctx context.Context, userID string, limit, offset int) ([]domain.FlaggedItem, int64, error) {
+	var items []domain.FlaggedItem
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("reviewed_by = ?", userID)
+
+	// Get total count
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count flagged items by reviewer: %w", err)
+	}
+
+	// Get items with pagination
+	result := query.Order("reviewed_at DESC").Limit(limit).Offset(offset).Find(&items)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("failed to list flagged items by reviewer: %w", result.Error)
+	}
+
+	return items, total, nil
+}
+
+// UpdateClassification updates a flagged item with classification and notes
+func (r *FlaggedItemRepository) UpdateClassification(ctx context.Context, id, status, reviewedBy, notes string) error {
+	updates := map[string]interface{}{
+		"status":       status,
+		"reviewed_by":  reviewedBy,
+		"review_notes": notes,
+		"updated_at":   time.Now(),
+	}
+
+	if status != domain.StatusPending {
+		now := time.Now()
+		updates["reviewed_at"] = &now
+	}
+
+	result := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update flagged item classification: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("flagged item not found")
+	}
+	return nil
+}

@@ -61,11 +61,14 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	flaggedItemRepo := repository.NewFlaggedItemRepository(db)
+	auditNoteRepo := repository.NewAuditNoteRepository(db)
+	auditLogRepo := repository.NewAuditLogRepository(db)
 
 	// Initialize services
 	jwtSecret := "your-secret-key" // In production, use environment variable
 	userService := service.NewUserService(userRepo, jwtSecret)
 	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo)
+	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo)
 
 	// Initialize router
 	r := router.Init()
@@ -76,6 +79,7 @@ func main() {
 	// Initialize handlers
 	handler.InitUserHandler(userService, r)
 	handler.InitFlaggedItemHandler(flaggedItemService, r)
+	handler.InitAuditHandler(auditService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

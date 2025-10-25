@@ -31,5 +31,14 @@ type FlaggedItemRepository interface {
 
 	// UpdateStatus updates the status of a flagged item
 	UpdateStatus(ctx context.Context, id, status, reviewedBy string) error
+
+	// GetWithOriginalData retrieves a flagged item with original data based on type
+	GetWithOriginalData(ctx context.Context, id, itemType string) (*domain.FlaggedItem, interface{}, error)
+
+	// GetByReviewedBy retrieves flagged items reviewed by a specific user
+	GetByReviewedBy(ctx context.Context, userID string, limit, offset int) ([]domain.FlaggedItem, int64, error)
+
+	// UpdateClassification updates a flagged item with classification and notes
+	UpdateClassification(ctx context.Context, id, status, reviewedBy, notes string) error
 }
 
