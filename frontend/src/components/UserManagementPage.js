@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -36,6 +37,8 @@ import {
 import { userAPI } from '../services/api';
 
 const UserManagementPage = ({ onShowSnackbar }) => {
+  const location = useLocation();
+  const isAuditorManagement = location.pathname === '/auditors';
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -53,13 +56,14 @@ const UserManagementPage = ({ onShowSnackbar }) => {
 
   const roles = [
     { value: 'admin', label: 'Admin', color: 'error' },
+    { value: 'auditor', label: 'Auditor', color: 'success' },
     { value: 'analyst', label: 'Analyst', color: 'warning' },
     { value: 'viewer', label: 'Viewer', color: 'info' },
   ];
 
   useEffect(() => {
     fetchUsers();
-  }, [page]);
+  }, [page, isAuditorManagement]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -68,8 +72,15 @@ const UserManagementPage = ({ onShowSnackbar }) => {
         limit: 10,
         offset: (page - 1) * 10,
       });
-      setUsers(response.data.users);
-      setTotalPages(Math.ceil(response.data.total / 10));
+      
+      // Filter for auditors if on auditor management page
+      let filteredUsers = response.data.users;
+      if (isAuditorManagement) {
+        filteredUsers = response.data.users.filter(user => user.role === 'auditor');
+      }
+      
+      setUsers(filteredUsers);
+      setTotalPages(Math.ceil(filteredUsers.length / 10));
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch users');
     } finally {
@@ -93,7 +104,7 @@ const UserManagementPage = ({ onShowSnackbar }) => {
         first_name: '',
         last_name: '',
         email: '',
-        role: 'viewer',
+        role: isAuditorManagement ? 'auditor' : 'viewer',
         is_active: true,
       });
     }
@@ -107,7 +118,7 @@ const UserManagementPage = ({ onShowSnackbar }) => {
       first_name: '',
       last_name: '',
       email: '',
-      role: 'viewer',
+      role: isAuditorManagement ? 'auditor' : 'viewer',
       is_active: true,
     });
   };
@@ -168,7 +179,7 @@ const UserManagementPage = ({ onShowSnackbar }) => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
-          User Management
+          {isAuditorManagement ? 'Auditor Management' : 'User Management'}
         </Typography>
         <Button
           variant="contained"
@@ -176,7 +187,7 @@ const UserManagementPage = ({ onShowSnackbar }) => {
           onClick={() => handleOpenDialog()}
           sx={{ bgcolor: '#ff9800', '&:hover': { bgcolor: '#f57c00' } }}
         >
-          Add User
+          {isAuditorManagement ? 'Add Auditor' : 'Add User'}
         </Button>
       </Box>
 
@@ -260,7 +271,9 @@ const UserManagementPage = ({ onShowSnackbar }) => {
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <form onSubmit={handleSubmit}>
           <DialogTitle>
-            {editingUser ? 'Edit User' : 'Add New User'}
+            {editingUser 
+              ? `Edit ${isAuditorManagement ? 'Auditor' : 'User'}` 
+              : `Add New ${isAuditorManagement ? 'Auditor' : 'User'}`}
           </DialogTitle>
           <DialogContent>
             <TextField

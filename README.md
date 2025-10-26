@@ -135,7 +135,16 @@ See [RULE_ENGINE_INTEGRATION.md](./RULE_ENGINE_INTEGRATION.md) for detailed inte
    - Frontend: http://localhost:3001
    - Backend API: http://localhost:8081
    - Rule Engine API: http://localhost:8082
-
+```
+Access URLs:
+Frontend: http://localhost:3000
+Backend API: http://localhost:8080
+Rule Engine: http://localhost:8081
+Anomaly Detection: http://localhost:5001
+Prediction Engine: http://localhost:5002
+Risk Aggregation: http://localhost:5003
+Database: localhost:5433
+```
 ## v2
 
 - Model driven risk aggrigation engine

@@ -91,7 +91,7 @@ const LoginPage = ({ onLogin }) => {
             <img
               src='/logo.svg'
               alt='MAX Logo'
-              style={{ width: 144, height: 144, marginRight: 24 }}
+              style={{ width: 144, height: 144, marginRight: 12 }}
             />
             <Box
               sx={{

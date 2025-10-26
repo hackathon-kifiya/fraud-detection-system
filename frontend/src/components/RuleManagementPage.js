@@ -52,6 +52,7 @@ import RuleVersionHistoryDialog from "./RuleVersionHistoryDialog";
 const RuleManagementPage = ({ onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [rules, setRules] = useState([]);
+  const [dataTypes, setDataTypes] = useState([]);
   const [filters, setFilters] = useState({
     dataType: "",
     status: "",
@@ -62,6 +63,19 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
   const [testPanelOpen, setTestPanelOpen] = useState(false);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
+
+  // Load data types on component mount
+  useEffect(() => {
+    const loadDataTypes = async () => {
+      try {
+        const response = await ruleEngineAPI.getAllDataTypes();
+        setDataTypes(response.data || []);
+      } catch (error) {
+        console.error("Failed to load data types:", error);
+      }
+    };
+    loadDataTypes();
+  }, []);
 
   // Load rules on component mount
   useEffect(() => {
@@ -78,7 +92,8 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
         status: filters.status || undefined,
         search: filters.search || undefined,
       });
-      setRules(response.data.rules || []);
+      // The API returns {content: [...], totalElements: n}
+      setRules(response.data.content || []);
     } catch (error) {
       onShowSnackbar("Failed to load rules: " + error.message, "error");
     } finally {
@@ -337,11 +352,11 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
               label='Data Type'
             >
               <MenuItem value=''>All Types</MenuItem>
-              <MenuItem value='TRANSACTION'>Transaction</MenuItem>
-              <MenuItem value='KYC'>KYC</MenuItem>
-              <MenuItem value='LOAN'>Loan</MenuItem>
-              <MenuItem value='CREDIT'>Credit</MenuItem>
-              <MenuItem value='REPAYMENT'>Repayment</MenuItem>
+              {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
+                <MenuItem key={dt.id} value={dt.name}>
+                  {dt.displayName || dt.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 

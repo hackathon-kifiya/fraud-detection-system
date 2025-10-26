@@ -107,7 +107,9 @@ end`,
 const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
+  const [dataTypes, setDataTypes] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -116,6 +118,27 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
     drlContent: "",
     changeDescription: "",
   });
+
+  useEffect(() => {
+    const loadDataTypes = async () => {
+      try {
+        const response = await ruleEngineAPI.getAllDataTypes();
+        const types = response.data || [];
+        setDataTypes(types);
+        if (types.length > 0 && !rule) {
+          const firstType = types[0].name || "TRANSACTION";
+          setFormData(prev => ({
+            ...prev,
+            dataType: firstType,
+            drlContent: DRL_TEMPLATES[firstType] || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to load data types:", error);
+      }
+    };
+    loadDataTypes();
+  }, []);
 
   useEffect(() => {
     if (rule) {
@@ -128,17 +151,18 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
         changeDescription: "",
       });
     } else {
+      const defaultType = dataTypes.length > 0 ? dataTypes[0].name : "TRANSACTION";
       setFormData({
         name: "",
         description: "",
-        dataType: "TRANSACTION",
+        dataType: defaultType,
         status: "DRAFT",
-        drlContent: DRL_TEMPLATES.TRANSACTION,
+        drlContent: DRL_TEMPLATES[defaultType] || "",
         changeDescription: "",
       });
     }
     setValidationResult(null);
-  }, [rule, open]);
+  }, [rule, open, dataTypes]);
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -151,11 +175,28 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
     }
   };
 
-  const handleLoadTemplate = () => {
-    setFormData({
-      ...formData,
-      drlContent: DRL_TEMPLATES[formData.dataType] || "",
-    });
+  const handleLoadTemplate = async () => {
+    console.log("Load template clicked, dataType:", formData.dataType);
+    try {
+      setLoadingTemplate(true);
+      // Fetch template from API for all data types
+      console.log("Fetching template from API for:", formData.dataType);
+      const response = await ruleEngineAPI.getTemplate(formData.dataType);
+      console.log("API response:", response);
+      
+      // Update the drlContent from API response
+      const templateContent = response.data?.drlContent || "";
+      setFormData(prev => ({
+        ...prev,
+        drlContent: templateContent,
+      }));
+      onShowSnackbar("Template loaded successfully", "success");
+      setLoadingTemplate(false);
+    } catch (error) {
+      console.error("Error loading template:", error);
+      onShowSnackbar("Failed to load template: " + error.message, "error");
+      setLoadingTemplate(false);
+    }
   };
 
   const handleValidate = async () => {
@@ -297,11 +338,11 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                     }
                     label='Data Type'
                   >
-                    <MenuItem value='TRANSACTION'>Transaction</MenuItem>
-                    <MenuItem value='KYC'>KYC</MenuItem>
-                    <MenuItem value='LOAN'>Loan</MenuItem>
-                    <MenuItem value='CREDIT'>Credit</MenuItem>
-                    <MenuItem value='REPAYMENT'>Repayment</MenuItem>
+                    {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
+                      <MenuItem key={dt.id} value={dt.name}>
+                        {dt.displayName || dt.name}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
@@ -351,14 +392,17 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                 DRL Content
               </Typography>
               <Box sx={{ display: "flex", gap: 1 }}>
-                <Button
-                  variant='outlined'
-                  startIcon={<CodeIcon />}
-                  onClick={handleLoadTemplate}
-                  size='small'
-                >
-                  Load Template
-                </Button>
+                <Tooltip title="Load template from API">
+                  <Button
+                    variant='outlined'
+                    startIcon={loadingTemplate ? <CircularProgress size={16} /> : <CodeIcon />}
+                    onClick={handleLoadTemplate}
+                    disabled={loadingTemplate}
+                    size='small'
+                  >
+                    Load Template
+                  </Button>
+                </Tooltip>
                 <Button
                   variant='outlined'
                   startIcon={

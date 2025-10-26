@@ -72,6 +72,7 @@ func main() {
 	caseAssignmentRepo := repository.NewCaseAssignmentRepository(db)
 	performanceReportRepo := repository.NewPerformanceReportRepository(db)
 	kpiMetricsRepo := repository.NewKPIMetricsRepository(db)
+	callbackRepo := repository.NewCallbackRepository(db)
 
 	// Initialize engine clients
 
@@ -95,6 +96,7 @@ func main() {
 	// ruleEvaluationService := service.NewRuleEvaluationService(ruleEngineClient, flaggedItemRepo, flaggedItemService)
 	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
 	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
+	callbackService := service.NewCallbackService(callbackRepo)
 
 	// Initialize router
 	r := router.Init()
@@ -107,6 +109,7 @@ func main() {
 	handler.InitFlaggedItemHandler(flaggedItemService, r)
 	handler.InitAuditHandler(auditService, r)
 	handler.InitAdminHandler(adminService, r)
+	handler.InitCallbackHandler(callbackService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

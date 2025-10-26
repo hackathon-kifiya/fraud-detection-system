@@ -12,9 +12,12 @@ RUN npm install && npm install -g serve
 # Copy source code
 COPY . .
 
-# Set build-time environment variable
+# Set build-time environment variables
 ARG REACT_APP_BACKEND_URL
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+
+ARG REACT_APP_RULE_ENGINE_URL
+ENV REACT_APP_RULE_ENGINE_URL=$REACT_APP_RULE_ENGINE_URL
 
 # Build the application
 RUN npm run build

@@ -8,6 +8,8 @@ import {
   CardContent,
   CircularProgress,
   Button,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   Security,
@@ -34,6 +36,7 @@ const Dashboard = ({ onShowSnackbar }) => {
     recentActivity: [],
   });
   const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState(0);
 
   const loadStats = async () => {
     try {
@@ -264,10 +267,10 @@ const Dashboard = ({ onShowSnackbar }) => {
         </Grid>
       </Grid>
 
-      {/* Detection Types Overview */}
+      {/* Detection Types Overview with Tabs */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12}>
-          <Paper sx={{ borderRadius: 2, boxShadow: 1, overflow: "hidden" }}>
+          <Paper sx={{ borderRadius: 2, boxShadow: 2, overflow: "hidden" }}>
             <Box sx={{ p: 3, borderBottom: "1px solid #e0e0e0" }}>
               <Typography
                 variant='h6'
@@ -280,161 +283,160 @@ const Dashboard = ({ onShowSnackbar }) => {
               </Typography>
             </Box>
 
-            <Box sx={{ p: 3 }}>
-              <Grid container spacing={2}>
-                {fraudDetectionTypes.map((type) => {
-                  const IconComponent = type.icon;
-                  const count = stats.flaggedByType?.[type.key] || 0;
+            <Box>
+              <Tabs
+                value={selectedTab}
+                onChange={(e, newValue) => setSelectedTab(newValue)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  borderBottom: "1px solid #e0e0e0",
+                  "& .MuiTab-root": {
+                    textTransform: "capitalize",
+                    fontWeight: 500,
+                    fontSize: "0.875rem",
+                  },
+                  "& .Mui-selected": {
+                    fontWeight: "bold",
+                  },
+                }}
+              >
+                {fraudDetectionTypes.map((type) => (
+                  <Tab
+                    key={type.key}
+                    label={
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <type.icon sx={{ fontSize: 20 }} />
+                        <span>{type.label}</span>
+                      </Box>
+                    }
+                  />
+                ))}
+              </Tabs>
+            </Box>
 
-                  return (
-                    <Grid item xs={12} sm={6} md={4} key={type.key}>
-                      <Card
-                        sx={{
-                          borderRadius: 2,
-                          boxShadow: 1,
-                          height: "100%",
-                          "&:hover": { boxShadow: 3 },
-                        }}
-                      >
-                        <CardContent>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              mb: 2,
-                            }}
-                          >
+            <Box sx={{ p: 3 }}>
+              {fraudDetectionTypes.map((type, index) => {
+                const IconComponent = type.icon;
+                const count = stats.flaggedByType?.[type.key] || 0;
+                const percentage = stats.totalFlagged > 0 
+                  ? ((count / stats.totalFlagged) * 100).toFixed(1) 
+                  : 0;
+
+                return (
+                  <Box
+                    key={type.key}
+                    sx={{ display: selectedTab === index ? "block" : "none" }}
+                  >
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <Card
+                          sx={{
+                            borderRadius: 2,
+                            boxShadow: 1,
+                            height: "100%",
+                            bgcolor: "#ffffff",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <CardContent>
+                            <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
                             <Box
                               sx={{
-                                p: 1,
+                                p: 2,
                                 borderRadius: 2,
-                                bgcolor: `${type.color}15`,
-                                color: type.color,
+                                bgcolor: "#f5f5f5",
                                 mr: 2,
                               }}
                             >
-                              <IconComponent sx={{ fontSize: 20 }} />
+                              <IconComponent sx={{ fontSize: 32, color: "#757575" }} />
                             </Box>
-                            <Typography
-                              variant='h6'
-                              sx={{ fontWeight: "bold", color: "#424242" }}
-                            >
-                              {type.label}
-                            </Typography>
+                            <Box>
+                              <Typography
+                                variant='h6'
+                                sx={{ fontWeight: "bold", color: "#424242" }}
+                              >
+                                {type.label}
+                              </Typography>
+                              <Typography variant='body2' color='text.secondary'>
+                                Flagged Items
+                              </Typography>
+                            </Box>
                           </Box>
                           <Typography
-                            variant='h4'
+                            variant='h2'
                             sx={{
                               fontWeight: "bold",
-                              color: type.color,
+                              color: "#424242",
                               mb: 1,
                             }}
                           >
                             {count}
                           </Typography>
                           <Typography variant='body2' color='text.secondary'>
-                            Flagged items
+                            {percentage}% of total flagged items
                           </Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Quick Actions Section */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12}>
-          <Paper sx={{ borderRadius: 2, boxShadow: 1, overflow: "hidden" }}>
-            <Box sx={{ p: 3, borderBottom: "1px solid #e0e0e0" }}>
-              <Typography
-                variant='h6'
-                sx={{ fontWeight: "bold", color: "#424242", mb: 1 }}
-              >
-                Quick Actions
-              </Typography>
-              <Typography variant='body2' color='text.secondary'>
-                Access fraud detection modules for different data types
-              </Typography>
-            </Box>
-
-            <Box sx={{ p: 3 }}>
-              <Grid container spacing={2}>
-                {fraudDetectionTypes.map((type) => {
-                  const IconComponent = type.icon;
-
-                  return (
-                    <Grid item xs={12} sm={6} md={4} key={type.key}>
-                      <Card
-                        sx={{
-                          borderRadius: 2,
-                          boxShadow: 1,
-                          height: "100%",
-                          "&:hover": { boxShadow: 3 },
-                        }}
-                      >
-                        <CardContent>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              mb: 2,
-                            }}
-                          >
-                            <Box
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Card
+                          sx={{
+                            borderRadius: 2,
+                            boxShadow: 1,
+                            height: "100%",
+                            bgcolor: "#ffffff",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <CardContent>
+                            <Typography
+                              variant='subtitle1'
+                              sx={{ fontWeight: "bold", color: "#424242", mb: 2 }}
+                            >
+                              Quick Actions
+                            </Typography>
+                            <Button
+                              variant='contained'
+                              startIcon={<Security />}
+                              href={`/${type.key.replace("_", "-")}`}
+                              fullWidth
                               sx={{
-                                p: 1,
+                                mb: 2,
                                 borderRadius: 2,
-                                bgcolor: `${type.color}15`,
-                                color: type.color,
-                                mr: 2,
+                                py: 1.5,
+                                bgcolor: "#1976d2",
+                                "&:hover": {
+                                  bgcolor: "#1565c0",
+                                },
                               }}
                             >
-                              <IconComponent sx={{ fontSize: 20 }} />
-                            </Box>
-                            <Typography
-                              variant='h6'
-                              sx={{ fontWeight: "bold", color: "#424242" }}
+                              View {type.label} Detection
+                            </Button>
+                            <Button
+                              variant='outlined'
+                              startIcon={<Assessment />}
+                              fullWidth
+                              sx={{
+                                borderRadius: 2,
+                                py: 1.5,
+                                borderColor: "#1976d2",
+                                color: "#1976d2",
+                                "&:hover": {
+                                  borderColor: "#1976d2",
+                                  bgcolor: "#e3f2fd",
+                                },
+                              }}
                             >
-                              {type.label}
-                            </Typography>
-                          </Box>
-                          <Typography
-                            variant='body2'
-                            color='text.secondary'
-                            paragraph
-                          >
-                            View and manage {type.label.toLowerCase()} fraud
-                            detection
-                          </Typography>
-                          <Button
-                            variant='outlined'
-                            startIcon={<Security />}
-                            href={`/${type.key.replace("_", "-")}`}
-                            sx={{
-                              borderRadius: 2,
-                              px: 3,
-                              py: 1,
-                              borderColor: type.color,
-                              color: type.color,
-                              "&:hover": {
-                                borderColor: type.color,
-                                bgcolor: `${type.color}15`,
-                              },
-                            }}
-                          >
-                            Go to {type.label}
-                          </Button>
-                        </CardContent>
-                      </Card>
+                              View Details
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      </Grid>
                     </Grid>
-                  );
-                })}
-              </Grid>
+                  </Box>
+                );
+              })}
             </Box>
           </Paper>
         </Grid>

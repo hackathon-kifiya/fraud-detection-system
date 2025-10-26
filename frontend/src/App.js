@@ -22,7 +22,6 @@ import {
   Alert,
   Snackbar,
   IconButton,
-  Avatar,
   Badge,
   Collapse,
   Menu,
@@ -51,6 +50,11 @@ import {
   Assignment as CaseManagementIcon,
   Storage as RuleManagementIcon,
   Speed as RuleTestIcon,
+  Category as DataTypeManagementIcon,
+  Assessment as TestEvaluationIcon,
+  AutoAwesome as PlaygroundIcon,
+  VerifiedUser as AuditorManagementIcon,
+  Webhook as IntegrationSettingsIcon,
 } from "@mui/icons-material";
 import Dashboard from "./components/Dashboard";
 import TransactionsPage from "./components/TransactionsPage";
@@ -61,11 +65,13 @@ import RepaymentsPage from "./components/RepaymentsPage";
 import SettingsPage from "./components/SettingsPage";
 import LoginPage from "./components/LoginPage";
 import UserManagementPage from "./components/UserManagementPage";
+import AuditorManagementPage from "./components/AuditorManagementPage";
+import IntegrationSettingsPage from "./components/IntegrationSettingsPage";
 import CaseManagementPage from "./components/CaseManagementPage";
 import RuleManagementPage from "./components/RuleManagementPage";
+import DataTypeManagementPage from "./components/DataTypeManagementPage";
 import DataEvaluationPanel from "./components/DataEvaluationPanel";
 import RiskDecisionPage from "./components/RiskDecisionPage";
-import SystemStatusPage from "./components/SystemStatusPage";
 import ProfilePage from "./components/ProfilePage";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -100,6 +106,8 @@ function AppContent({ isActiveRoute }) {
   const [openMenus, setOpenMenus] = useState({
     fraudDetection: true,
     ruleEngine: true,
+    anomalyDetectionEngine: true,
+    playground: false,
   });
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
 
@@ -135,7 +143,7 @@ function AppContent({ isActiveRoute }) {
   const getNavigationItems = () => {
     const role = user?.role;
 
-    if (role === "admin") {
+    if (role === "superadmin") {
       return [
         {
           key: "dashboard",
@@ -144,16 +152,10 @@ function AppContent({ isActiveRoute }) {
           path: "/dashboard",
         },
         {
-          key: "case-management",
-          label: "Case Management",
-          icon: CaseManagementIcon,
-          path: "/case-management",
-        },
-        {
-          key: "users",
-          label: "User Management",
-          icon: GroupIcon,
-          path: "/users",
+          key: "auditor-management",
+          label: "Auditor Management",
+          icon: AuditorManagementIcon,
+          path: "/auditors",
         },
         {
           key: "rule-engine",
@@ -168,10 +170,10 @@ function AppContent({ isActiveRoute }) {
               path: "/rules",
             },
             {
-              key: "rule-test",
-              label: "Test Evaluation",
-              icon: RuleTestIcon,
-              path: "/rules/evaluate",
+              key: "data-type-management",
+              label: "Data Type Management",
+              icon: DataTypeManagementIcon,
+              path: "/rules/data-types",
             },
           ],
         },
@@ -180,6 +182,135 @@ function AppContent({ isActiveRoute }) {
           label: "Risk Decision",
           icon: SecurityIcon,
           path: "/risk-decision",
+        },
+        {
+          key: "playground",
+          label: "Playground",
+          icon: PlaygroundIcon,
+          path: null,
+          subItems: [
+            {
+              key: "rule-test-evaluation",
+              label: "Rule Engine Test Evaluation",
+              icon: RuleTestIcon,
+              path: "/rules/evaluate",
+            },
+            {
+              key: "anomaly-test-evaluation",
+              label: "Anomaly Detection Test Evaluation",
+              icon: TestEvaluationIcon,
+              path: "/anomaly-detection/evaluate",
+            },
+            {
+              key: "predictive-modeling-test-evaluation",
+              label: "Predictive Modeling Test Evaluation",
+              icon: TestEvaluationIcon,
+              path: "/predictive-modeling/evaluate",
+            },
+          ],
+        },
+        {
+          key: "users",
+          label: "User Management",
+          icon: GroupIcon,
+          path: "/users",
+        },
+        {
+          key: "integration-settings",
+          label: "Integration Settings",
+          icon: IntegrationSettingsIcon,
+          path: "/integration-settings",
+        },
+        {
+          key: "settings",
+          label: "Settings",
+          icon: SettingsIcon,
+          path: "/settings",
+        },
+      ];
+    } else if (role === "admin") {
+      return [
+        {
+          key: "dashboard",
+          label: "Dashboard",
+          icon: DashboardIcon,
+          path: "/dashboard",
+        },
+        {
+          key: "case-management",
+          label: "Case Management",
+          icon: CaseManagementIcon,
+          path: "/case-management",
+        },
+        {
+          key: "auditor-management",
+          label: "Auditor Management",
+          icon: AuditorManagementIcon,
+          path: "/auditors",
+        },
+        {
+          key: "rule-engine",
+          label: "Rule Engine Management",
+          icon: RuleManagementIcon,
+          path: null,
+          subItems: [
+            {
+              key: "rule-management",
+              label: "Rule Management",
+              icon: RuleManagementIcon,
+              path: "/rules",
+            },
+            {
+              key: "data-type-management",
+              label: "Data Type Management",
+              icon: DataTypeManagementIcon,
+              path: "/rules/data-types",
+            },
+          ],
+        },
+        {
+          key: "risk-decision",
+          label: "Risk Decision",
+          icon: SecurityIcon,
+          path: "/risk-decision",
+        },
+        {
+          key: "playground",
+          label: "Playground",
+          icon: PlaygroundIcon,
+          path: null,
+          subItems: [
+            {
+              key: "rule-test-evaluation",
+              label: "Rule Engine Test Evaluation",
+              icon: RuleTestIcon,
+              path: "/rules/evaluate",
+            },
+            {
+              key: "anomaly-test-evaluation",
+              label: "Anomaly Detection Test Evaluation",
+              icon: TestEvaluationIcon,
+              path: "/anomaly-detection/evaluate",
+            },
+            {
+              key: "predictive-modeling-test-evaluation",
+              label: "Predictive Modeling Test Evaluation",
+              icon: TestEvaluationIcon,
+              path: "/predictive-modeling/evaluate",
+            },
+          ],
+        },
+        {
+          key: "users",
+          label: "User Management",
+          icon: GroupIcon,
+          path: "/users",
+        },
+        {
+          key: "integration-settings",
+          label: "Integration Settings",
+          icon: IntegrationSettingsIcon,
+          path: "/integration-settings",
         },
         {
           key: "settings",
@@ -273,7 +404,7 @@ function AppContent({ isActiveRoute }) {
   }
 
   if (!isAuthenticated()) {
-    return <LoginPage onLogin={login} />;
+    return <LoginPage onLogin={(user) => { login(user); navigate('/dashboard'); }} />;
   }
 
   return (
@@ -571,9 +702,12 @@ function AppContent({ isActiveRoute }) {
                   </Badge>
                 </IconButton>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Avatar sx={{ width: 36, height: 36, bgcolor: "#ff9800" }}>
-                    <AccountCircleIcon sx={{ fontSize: "1.25rem" }} />
-                  </Avatar>
+                  <AccountCircleIcon 
+                    sx={{ 
+                      fontSize: "2rem", 
+                      color: "text.secondary"
+                    }} 
+                  />
                   <Box
                     sx={{
                       display: "flex",
@@ -656,6 +790,10 @@ function AppContent({ isActiveRoute }) {
                 element={<UserManagementPage onShowSnackbar={showSnackbar} />}
               />
               <Route
+                path='/auditors'
+                element={<AuditorManagementPage onShowSnackbar={showSnackbar} />}
+              />
+              <Route
                 path='/case-management'
                 element={<CaseManagementPage onShowSnackbar={showSnackbar} />}
               />
@@ -664,7 +802,19 @@ function AppContent({ isActiveRoute }) {
                 element={<RuleManagementPage onShowSnackbar={showSnackbar} />}
               />
               <Route
+                path='/rules/data-types'
+                element={<DataTypeManagementPage onShowSnackbar={showSnackbar} />}
+              />
+              <Route
                 path='/rules/evaluate'
+                element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
+              />
+              <Route
+                path='/anomaly-detection/evaluate'
+                element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
+              />
+              <Route
+                path='/predictive-modeling/evaluate'
                 element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
               />
               <Route
@@ -674,6 +824,10 @@ function AppContent({ isActiveRoute }) {
               <Route
                 path='/profile'
                 element={<ProfilePage onShowSnackbar={showSnackbar} />}
+              />
+              <Route
+                path='/integration-settings'
+                element={<IntegrationSettingsPage onShowSnackbar={showSnackbar} />}
               />
             </Routes>
           </Box>
@@ -744,7 +898,6 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path='/status' element={<SystemStatusPage />} />
           <Route path='/*' element={<MainContent />} />
         </Routes>
       </Router>

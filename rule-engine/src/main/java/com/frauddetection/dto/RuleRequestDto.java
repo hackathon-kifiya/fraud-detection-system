@@ -17,5 +17,6 @@ public class RuleRequestDto {
     private String dataType;
     private String drlContent;
     private String createdBy;
+    private String updatedBy;
 }
 

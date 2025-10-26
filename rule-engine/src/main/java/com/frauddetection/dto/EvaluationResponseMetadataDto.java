@@ -15,6 +15,7 @@ public class EvaluationResponseMetadataDto {
     private Integer totalFacts;
     private Double totalRiskScore;
     private Double averageRiskScore;
+    private Double normalizedRiskScore;
     private Integer totalViolations;
     private Integer individualResponses;
 }

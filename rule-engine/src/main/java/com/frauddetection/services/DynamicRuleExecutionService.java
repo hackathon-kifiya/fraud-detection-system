@@ -1,6 +1,7 @@
 package com.frauddetection.services;
 
 import com.frauddetection.domain.*;
+import com.frauddetection.exceptions.RuleExecutionException;
 import com.frauddetection.repository.RuleRepository;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
@@ -38,43 +39,70 @@ public class DynamicRuleExecutionService {
     }
 
     private Evaluation evaluateFact(DynamicFact fact, List<Rule> rules) {
-        double riskScore;
         try {
             KieContainer kieContainer = buildKieContainerFromRules(rules);
             StatelessKieSession session = kieContainer.newStatelessKieSession();
+            
+            // Make sure violations list is initialized
+            if (fact.getViolations() == null) {
+                fact.setViolations(new ArrayList<>());
+            }
+            
             session.execute(fact);
-            riskScore = fact.getTotalRiskScore();
-        } catch (Exception e) {
-           throw new RuntimeException("failed to evaluate");
-        }
+            double riskScore = fact.getTotalRiskScore();
+            
+            // Debug: Get violations count
+            int violationsCount = (fact.getViolations() != null) ? fact.getViolations().size() : 0;
+            System.out.println("DEBUG: Fact violations count: " + violationsCount + ", Risk score: " + riskScore);
+            if (violationsCount > 0) {
+                System.out.println("DEBUG: First violation: " + fact.getViolations().get(0));
+            }
 
-        return Evaluation.builder()
-                .riskScore(riskScore)
-                .build();
+            return Evaluation.builder()
+                    .entityId(fact.getEntityId())
+                    .riskScore(riskScore)
+                    .violations(fact.getViolations())
+                    .build();
+        } catch (Exception e) {
+            // Let the exception propagate to controller advice
+            throw new RuleExecutionException("Failed to evaluate fact: " + e.getMessage(), e);
+        }
     }
 
+    /**
+     * Builds a Drools KieContainer from rules stored in the database.
+     * Note: Rules are stored as strings in DB, but Drools requires them in a virtual file system
+     * (not actual disk files) for compilation and execution.
+     * 
+     * @param rules - Rules loaded from database
+     * @return Compiled KieContainer ready for rule execution
+     */
     private KieContainer buildKieContainerFromRules(List<Rule> rules) {
         KieServices kieServices = KieServices.Factory.get();
+        // Create virtual file system (not actual files - in-memory only)
         KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
 
-        // Add each rule to the file system
+        // Register each rule from database into the virtual file system
         for (int i = 0; i < rules.size(); i++) {
             Rule rule = rules.get(i);
-            String fileName = "src/main/resources/rules/dynamic_" + rule.getName().replaceAll("\\s+", "_") + "_" + i + ".drl";
-            kieFileSystem.write(fileName, rule.getDrlContent());
+            // Virtual path - used by Drools for compilation, not a real file path
+            String virtualPath = "src/main/resources/rules/dynamic_" + rule.getName().replaceAll("\\s+", "_") + "_" + i + ".drl";
+            // Write rule content to virtual file system
+            kieFileSystem.write(virtualPath, rule.getDrlContent());
         }
 
-        // Build the container
+        // Compile all rules in the virtual file system
         KieBuilder kieBuilder = kieServices.newKieBuilder(kieFileSystem);
         kieBuilder.buildAll();
 
+        // Check for compilation errors
         Results results = kieBuilder.getResults();
         if (results.hasMessages(Message.Level.ERROR)) {
             StringBuilder errorMsg = new StringBuilder("Rule compilation errors: ");
             for (Message message : results.getMessages(Message.Level.ERROR)) {
                 errorMsg.append(message.getText()).append("; ");
             }
-            throw new RuntimeException(errorMsg.toString());
+            throw new RuleExecutionException(errorMsg.toString());
         }
 
         return kieServices.newKieContainer(kieBuilder.getKieModule().getReleaseId());
@@ -107,25 +135,38 @@ public class DynamicRuleExecutionService {
 
 
     private Evaluation aggregateResponses(List<Evaluation> responses) {
-
+        // Define maximum possible risk score
+        // This represents the worst-case scenario with all violations triggered
+        final double MAX_POSSIBLE_SCORE = 20.0;
+        
         double totalRiskScore = responses.stream()
                 .mapToDouble(Evaluation::getRiskScore)
                 .sum();
         
         double averageRiskScore = totalRiskScore / responses.size();
         
-        int totalViolations = responses.stream()
-                .mapToInt(r -> r.getViolations() != null ? r.getViolations().size() : 0)
-                .sum();
+        // Normalize risk score to 0-1 scale
+        double normalizedRiskScore = Math.min(1.0, averageRiskScore / MAX_POSSIBLE_SCORE);
+        
+        // Collect all violations from all responses
+        List<Violation> allViolations = new ArrayList<>();
+        for (Evaluation response : responses) {
+            if (response.getViolations() != null) {
+                allViolations.addAll(response.getViolations());
+            }
+        }
+        
+        int totalViolations = allViolations.size();
 
         return Evaluation.builder()
                 .entityId("aggregated")
                 .riskScore(averageRiskScore)
-                .violations(new ArrayList<>())
+                .violations(allViolations)
                 .metadata(EvaluationMetadata.builder()
                         .totalFacts(responses.size())
                         .totalRiskScore(totalRiskScore)
                         .averageRiskScore(averageRiskScore)
+                        .normalizedRiskScore(normalizedRiskScore)
                         .totalViolations(totalViolations)
                         .individualResponses(responses.size())
                         .build())

@@ -32,16 +32,16 @@ public interface RuleRepository extends CrudRepository<Rule, UUID> {
     
     List<Rule> findByCreatedBy(String createdBy);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) ORDER BY created_at DESC")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) ORDER BY created_at DESC")
     List<Rule> findByNameOrDescriptionContainingIgnoreCase(@Param("search") String search);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType ORDER BY created_at DESC")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND data_type = :dataType ORDER BY created_at DESC")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataType(@Param("search") String search, @Param("dataType") String dataType);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND status = :status ORDER BY created_at DESC")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND status = :status ORDER BY created_at DESC")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndStatus(@Param("search") String search, @Param("status") String status);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType AND status = :status ORDER BY created_at DESC")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND data_type = :dataType AND status = :status ORDER BY created_at DESC")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatus(@Param("search") String search, @Param("dataType") String dataType, @Param("status") String status);
     
     @Query("SELECT * FROM rule ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
@@ -56,15 +56,15 @@ public interface RuleRepository extends CrudRepository<Rule, UUID> {
     @Query("SELECT * FROM rule WHERE data_type = :dataType AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
     List<Rule> findByDataTypeAndStatusWithPagination(@Param("dataType") String dataType, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseWithPagination(@Param("search") String search, @Param("limit") int limit, @Param("offset") int offset);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND data_type = :dataType ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeWithPagination(@Param("search") String search, @Param("dataType") String dataType, @Param("limit") int limit, @Param("offset") int offset);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndStatusWithPagination(@Param("search") String search, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
     
-    @Query("SELECT * FROM rule WHERE (name ILIKE %:search% OR description ILIKE %:search%) AND data_type = :dataType AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM rule WHERE (name ILIKE :search OR description ILIKE :search) AND data_type = :dataType AND status = :status ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
     List<Rule> findByNameOrDescriptionContainingIgnoreCaseAndDataTypeAndStatusWithPagination(@Param("search") String search, @Param("dataType") String dataType, @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
 }

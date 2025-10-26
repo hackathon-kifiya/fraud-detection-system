@@ -1,10 +1,21 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.REACT_APP_BACKEND_URL || "http://localhost";
+  process.env.REACT_APP_BACKEND_URL || "http://localhost:8080";
+
+const RULE_ENGINE_URL =
+  process.env.REACT_APP_RULE_ENGINE_URL || "http://localhost:8081";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+const ruleEngineApi = axios.create({
+  baseURL: RULE_ENGINE_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -215,36 +226,62 @@ export const adminAPI = {
     api.get("/api/admin/analytics/trends", { params }),
   getThroughputMetrics: (params) =>
     api.get("/api/admin/analytics/throughput", { params }),
+
+  // Callback Management
+  getCallbacks: (params) => api.get("/api/callbacks", { params }),
+  getCallback: (id) => api.get(`/api/callbacks/${id}`),
+  createCallback: (data) => api.post("/api/callbacks", data),
+  updateCallback: (id, data) => api.put(`/api/callbacks/${id}`, data),
+  deleteCallback: (id) => api.delete(`/api/callbacks/${id}`),
+};
+
+// Callback endpoints
+export const callbackAPI = {
+  getAll: (params) => api.get("/api/callbacks", { params }),
+  getById: (id) => api.get(`/api/callbacks/${id}`),
+  create: (data) => api.post("/api/callbacks", data),
+  update: (id, data) => api.put(`/api/callbacks/${id}`, data),
+  delete: (id) => api.delete(`/api/callbacks/${id}`),
 };
 
 // Rule Engine endpoints
 export const ruleEngineAPI = {
   // Rule CRUD operations
-  createRule: (data) => api.post("/api/rules", data),
-  getAllRules: (params) => api.get("/api/rules", { params }),
-  getRule: (id) => api.get(`/api/rules/${id}`),
-  updateRule: (id, data) => api.put(`/api/rules/${id}`, data),
-  deleteRule: (id) => api.delete(`/api/rules/${id}`),
+  createRule: (data) => ruleEngineApi.post("/api/rules", data),
+  getAllRules: (params) => ruleEngineApi.get("/api/rules", { params }),
+  getRule: (id) => ruleEngineApi.get(`/api/rules/${id}`),
+  updateRule: (id, data) => ruleEngineApi.put(`/api/rules/${id}`, data),
+  deleteRule: (id) => ruleEngineApi.delete(`/api/rules/${id}`),
 
   // Rule activation
-  activateRule: (id) => api.post(`/api/rules/${id}/activate`),
-  deactivateRule: (id) => api.post(`/api/rules/${id}/deactivate`),
+  activateRule: (id) => ruleEngineApi.post(`/api/rules/${id}/activate`),
+  deactivateRule: (id) => ruleEngineApi.post(`/api/rules/${id}/deactivate`),
 
   // Rule validation and versioning
-  validateDrl: (data) => api.post("/api/rules/validate", data),
-  getRuleVersions: (id) => api.get(`/api/rules/${id}/versions`),
+  validateDrl: (data) => ruleEngineApi.post("/api/rules/validate", data),
+  getRuleVersions: (id) => ruleEngineApi.get(`/api/rules/${id}/versions`),
   rollbackRule: (id, version, data) =>
-    api.post(`/api/rules/${id}/rollback/${version}`, data),
+    ruleEngineApi.post(`/api/rules/${id}/rollback/${version}`, data),
+
+  // Rule templates
+  getLoanTemplate: () => ruleEngineApi.get("/api/rules/templates/loan"),
+  getTemplate: (dataType) => ruleEngineApi.get("/api/rules/templates", { params: { dataType } }),
+
+  // Data Type Management
+  getAllDataTypes: (params) => ruleEngineApi.get("/api/data-types", { params }),
+  getDataType: (id) => ruleEngineApi.get(`/api/data-types/${id}`),
+  getDataTypeByName: (name) => ruleEngineApi.get(`/api/data-types/by-name/${name}`),
+  createDataType: (data) => ruleEngineApi.post("/api/data-types", data),
+  updateDataType: (id, data) => ruleEngineApi.put(`/api/data-types/${id}`, data),
+  deleteDataType: (id) => ruleEngineApi.delete(`/api/data-types/${id}`),
+  activateDataType: (id) => ruleEngineApi.post(`/api/data-types/${id}/activate`),
+  deactivateDataType: (id) => ruleEngineApi.post(`/api/data-types/${id}/deactivate`),
+  getSampleData: (dataType, limit) =>
+    ruleEngineApi.get(`/api/data-types/${dataType}/sample-data`, { params: { limit } }),
 
   // Rule evaluation
-  evaluateTransaction: (facts) =>
-    api.post("/api/evaluate/transaction", { facts }),
-  evaluateKYC: (facts) => api.post("/api/evaluate/kyc", { facts }),
-  evaluateLoan: (facts) => api.post("/api/evaluate/loan", { facts }),
-  evaluateCredit: (facts) => api.post("/api/evaluate/credit", { facts }),
-  evaluateRepayment: (facts) => api.post("/api/evaluate/repayment", { facts }),
   evaluateGeneric: (dataType, facts) =>
-    api.post("/api/evaluate/generic", { dataType, facts }),
+    ruleEngineApi.post("/api/evaluate/", { dataType, facts }),
 };
 
 // Risk Aggregation endpoints

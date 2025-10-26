@@ -1,10 +1,9 @@
 package com.frauddetection.domain;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
+import lombok.AllArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,9 +12,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuperBuilder
 public class ValidationResult {
+    @Builder.Default
     private boolean valid = false;
+    @Builder.Default
     private List<String> errors = new ArrayList<>();
+    @Builder.Default
     private List<String> warnings = new ArrayList<>();
 }

@@ -9,7 +9,6 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Divider,
   IconButton,
   TextField,
   FormControl,
@@ -25,11 +24,7 @@ import {
   Close as CloseIcon,
   PlayArrow as TestIcon,
   Code as CodeIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-  Warning as WarningIcon,
 } from "@mui/icons-material";
-import ReactJson from "react-json-view";
 import { ruleEngineAPI } from "../services/api";
 
 const SAMPLE_DATA = {
@@ -81,6 +76,22 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
   const [dataType, setDataType] = useState("TRANSACTION");
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [dataTypes, setDataTypes] = useState([]);
+
+  useEffect(() => {
+    const loadDataTypes = async () => {
+      try {
+        const response = await ruleEngineAPI.getAllDataTypes();
+        setDataTypes(response.data || []);
+        if (response.data && response.data.length > 0) {
+          setDataType(response.data[0].name);
+        }
+      } catch (error) {
+        console.error("Failed to load data types:", error);
+      }
+    };
+    loadDataTypes();
+  }, []);
 
   useEffect(() => {
     if (open && rule) {
@@ -125,27 +136,8 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
     setResults(null);
 
     try {
-      let response;
-      switch (dataType) {
-        case "TRANSACTION":
-          response = await ruleEngineAPI.evaluateTransaction(facts);
-          break;
-        case "KYC":
-          response = await ruleEngineAPI.evaluateKYC(facts);
-          break;
-        case "LOAN":
-          response = await ruleEngineAPI.evaluateLoan(facts);
-          break;
-        case "CREDIT":
-          response = await ruleEngineAPI.evaluateCredit(facts);
-          break;
-        case "REPAYMENT":
-          response = await ruleEngineAPI.evaluateRepayment(facts);
-          break;
-        default:
-          response = await ruleEngineAPI.evaluateGeneric(dataType, facts);
-      }
-
+      // Use the generic evaluation endpoint
+      const response = await ruleEngineAPI.evaluateGeneric(dataType.toLowerCase(), facts);
       setResults(response.data);
       onShowSnackbar("Rule test completed successfully", "success");
     } catch (error) {
@@ -153,32 +145,6 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
       onShowSnackbar("Rule test failed: " + error.message, "error");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getVerdictColor = (verdict) => {
-    switch (verdict) {
-      case "PASS":
-        return "success";
-      case "REVIEW":
-        return "warning";
-      case "FAIL":
-        return "error";
-      default:
-        return "default";
-    }
-  };
-
-  const getVerdictIcon = (verdict) => {
-    switch (verdict) {
-      case "PASS":
-        return <SuccessIcon />;
-      case "REVIEW":
-        return <WarningIcon />;
-      case "FAIL":
-        return <ErrorIcon />;
-      default:
-        return <CodeIcon />;
     }
   };
 
@@ -236,11 +202,11 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
                     onChange={(e) => setDataType(e.target.value)}
                     label='Data Type'
                   >
-                    <MenuItem value='TRANSACTION'>Transaction</MenuItem>
-                    <MenuItem value='KYC'>KYC</MenuItem>
-                    <MenuItem value='LOAN'>Loan</MenuItem>
-                    <MenuItem value='CREDIT'>Credit</MenuItem>
-                    <MenuItem value='REPAYMENT'>Repayment</MenuItem>
+                    {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
+                      <MenuItem key={dt.id} value={dt.name}>
+                        {dt.displayName || dt.name}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Box>
@@ -304,7 +270,7 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
                       </Typography>
 
                       <Grid container spacing={2}>
-                        <Grid item xs={6}>
+                        <Grid item xs={4}>
                           <Typography variant='body2' color='text.secondary'>
                             Risk Score
                           </Typography>
@@ -315,17 +281,24 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
                             sx={{ fontWeight: "bold" }}
                           />
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid item xs={4}>
                           <Typography variant='body2' color='text.secondary'>
-                            Verdict
+                            Violations
                           </Typography>
                           <Chip
-                            icon={getVerdictIcon(results.verdict)}
-                            label={results.verdict || "UNKNOWN"}
-                            color={getVerdictColor(results.verdict)}
+                            label={`${results.violationsCount || 0}`}
+                            color={results.violationsCount > 0 ? "error" : "success"}
                             size='small'
                             sx={{ fontWeight: "bold" }}
                           />
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant='body2' color='text.secondary'>
+                            Entity ID
+                          </Typography>
+                          <Typography variant='body2' sx={{ fontWeight: "bold", wordBreak: "break-all" }}>
+                            {results.entityId || "N/A"}
+                          </Typography>
                         </Grid>
                       </Grid>
 
@@ -361,18 +334,27 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
                       >
                         Detailed Results
                       </Typography>
-                      <ReactJson
-                        src={results}
-                        theme='monokai'
-                        collapsed={1}
-                        displayDataTypes={false}
-                        displayObjectSize={false}
-                        enableClipboard={false}
-                        style={{
-                          backgroundColor: "#f5f5f5",
-                          padding: "12px",
-                          borderRadius: "4px",
-                          fontSize: "12px",
+                      <TextField
+                        fullWidth
+                        multiline
+                        value={JSON.stringify(results, null, 2)}
+                        InputProps={{
+                          readOnly: true,
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.875rem",
+                            "& .MuiInputBase-input": {
+                              fontFamily: "monospace",
+                              fontSize: "0.875rem",
+                            },
+                          },
+                        }}
+                        sx={{
+                          "& .MuiInputBase-root": {
+                            backgroundColor: "#f9f9f9",
+                            maxHeight: "400px",
+                            overflow: "auto",
+                          },
                         }}
                       />
                     </CardContent>
