@@ -1,6 +1,7 @@
 package com.frauddetection.controllers;
 
 import com.frauddetection.domain.Rule;
+import com.frauddetection.dto.PageResponseDto;
 import com.frauddetection.dto.RuleRequestDto;
 import com.frauddetection.dto.RuleResponseDto;
 import com.frauddetection.mapper.RuleMapper;
@@ -8,6 +9,7 @@ import com.frauddetection.services.RuleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -33,9 +35,8 @@ public class RuleManagementController {
         description = "Creates a new rule with DRL content. The rule must be validated before creation."
     )
     @PostMapping
-    public ResponseEntity<RuleResponseDto> createRule(@RequestBody RuleRequestDto request) {
-        Rule rule = ruleManagementService.createRule(request);
-        RuleResponseDto response = ruleMapper.toDto(rule);
+    public ResponseEntity<RuleResponseDto> createRule(@Valid @RequestBody RuleRequestDto request) {
+        RuleResponseDto response = ruleManagementService.createRule(request);
         return ResponseEntity.ok(response);
     }
 
@@ -44,7 +45,7 @@ public class RuleManagementController {
         description = "Retrieves all rules with optional filtering by data type, status, and search term. Supports pagination."
     )
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAllRules(
+    public ResponseEntity<PageResponseDto<RuleResponseDto>> getAllRules(
             @RequestParam(value = "dataType", required = false) String dataType,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "search", required = false) String search,
@@ -56,56 +57,33 @@ public class RuleManagementController {
                 .map(ruleMapper::toDto)
                 .collect(Collectors.toList());
         
-        // Return a simple map instead of Page to avoid serialization issues
-        Map<String, Object> response = new HashMap<>();
-        response.put("content", dtoList);
-        response.put("totalElements", rules.getTotalElements());
-        response.put("number", rules.getNumber());
-        response.put("size", rules.getSize());
+        PageResponseDto<RuleResponseDto> response = PageResponseDto.<RuleResponseDto>builder()
+                .content(dtoList)
+                .totalElements(rules.getTotalElements())
+                .number(rules.getNumber())
+                .size(rules.getSize())
+                .totalPages(rules.getTotalPages())
+                .first(rules.isFirst())
+                .last(rules.isLast())
+                .build();
         
         return ResponseEntity.ok(response);
     }
 
     @Operation(
-        summary = "Get loan rule template",
-        description = "Returns a template DRL for creating loan rules with necessary declarations and commented examples."
+        summary = "Get template",
+        description = "Returns a template DRL"
     )
-    @GetMapping("/templates/loan")
-    public ResponseEntity<Map<String, String>> getLoanRuleTemplate() {
-        String template = "package rules;\n" +
+    @GetMapping("/example/template")
+    public ResponseEntity<Map<String, String>> getTemplate() {
+        
+        String template = "package rules;\n\n" +
                 "import com.frauddetection.domain.DynamicFact;\n\n" +
-                "// Example: Multiple loan defaults\n" +
-                "//rule \"MultipleDefaultsAlert\"\n" +
-                "//when\n" +
-                "//    $fact : DynamicFact( getPropertyAsNumber(\"defaults_count\").doubleValue() > 2 )\n" +
-                "//then\n" +
-                "//    $fact.addViolation(\"MULTIPLE_DEFAULTS\", \"Customer has multiple loan defaults\", 10);\n" +
-                "//end\n";
+                "rule \"Example Rule\"\n";
         
         Map<String, String> response = new HashMap<>();
         response.put("drlContent", template);
         return ResponseEntity.ok(response);
-    }
-
-    @Operation(
-        summary = "Get rule template",
-        description = "Returns a template DRL for creating rules"
-    )
-    @GetMapping("/template")
-    public ResponseEntity<String> getTemplate() {
-        
-        String template = "package rules;\n" +
-                        "import com.frauddetection.domain.DynamicFact;\n\n" +
-                        "rule \"High Amount Transaction\"\n" +
-                        "//when\n" +
-                        "//    $f: DynamicFact(\n" +
-                        "//        dataType == \"transaction\",\n" +
-                        "//        getDoubleProperty(\"amount\") > 10000\n" +
-                        "//    )\n" +
-                        "//then\n" +
-                        "//    $f.addViolation(\"TXN_HIGH_AMOUNT\", 20, \"Transaction amount exceeds threshold\");\n" +
-                        "//end";
-        return ResponseEntity.ok(template);
     }
 
     @Operation(summary = "Get rule by ID")
@@ -120,9 +98,8 @@ public class RuleManagementController {
     @PutMapping("/{id}")
     public ResponseEntity<RuleResponseDto> updateRule(
             @Parameter(description = "Rule UUID") @PathVariable("id") UUID id,
-            @RequestBody RuleRequestDto request) {
-        Rule rule = ruleManagementService.updateRule(id, request, request.getUpdatedBy());
-        RuleResponseDto response = ruleMapper.toDto(rule);
+            @Valid @RequestBody RuleRequestDto request) {
+        RuleResponseDto response = ruleManagementService.updateRule(id, request, request.getUpdatedBy());
         return ResponseEntity.ok(response);
     }
 
@@ -136,16 +113,14 @@ public class RuleManagementController {
     @Operation(summary = "Activate a rule", description = "Activates a rule to make it active for evaluation")
     @PostMapping("/{id}/activate")
     public ResponseEntity<RuleResponseDto> activateRule(@Parameter(description = "Rule UUID") @PathVariable("id") UUID id) {
-        Rule rule = ruleManagementService.activateRule(id);
-        RuleResponseDto response = ruleMapper.toDto(rule);
+        RuleResponseDto response = ruleManagementService.activateRule(id);
         return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Deactivate a rule", description = "Deactivates a rule (does not delete it)")
     @PostMapping("/{id}/deactivate")
     public ResponseEntity<RuleResponseDto> deactivateRule(@Parameter(description = "Rule UUID") @PathVariable("id") UUID id) {
-        Rule rule = ruleManagementService.deactivateRule(id);
-        RuleResponseDto response = ruleMapper.toDto(rule);
+        RuleResponseDto response = ruleManagementService.deactivateRule(id);
         return ResponseEntity.ok(response);
     }
 

@@ -48,7 +48,7 @@ public class RuleManagementService {
     }
 
     @Transactional
-    public Rule createRule(RuleRequestDto request) {
+    public RuleResponseDto createRule(RuleRequestDto request) {
         // Validate data type exists (enforce association)
         if (request.getDataType() == null || request.getDataType().trim().isEmpty()) {
             throw new ValidationException("Data type is required for rule creation");
@@ -83,7 +83,7 @@ public class RuleManagementService {
         // Use save method (insert/update handled by repository)
         rule = ruleRepository.save(rule);
         
-        return rule;
+        return ruleMapper.toDto(rule);
     }
     
     /**
@@ -203,7 +203,7 @@ public class RuleManagementService {
     }
 
     @Transactional
-    public Rule updateRule(UUID ruleId, RuleRequestDto request, String updatedBy) {
+    public RuleResponseDto updateRule(UUID ruleId, RuleRequestDto request, String updatedBy) {
         // Find existing rule
         Rule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new RuleNotFoundException("Rule not found with id: " + ruleId));
@@ -239,7 +239,8 @@ public class RuleManagementService {
         rule.setUpdatedAt(Instant.now());
         rule.setUpdatedBy(updatedBy);
         
-        return ruleRepository.save(rule);
+        Rule savedRule = ruleRepository.save(rule);
+        return ruleMapper.toDto(savedRule);
     }
 
     @Transactional
@@ -254,23 +255,25 @@ public class RuleManagementService {
     }
 
     @Transactional
-    public Rule activateRule(UUID ruleId) {
+    public RuleResponseDto activateRule(UUID ruleId) {
         Rule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new RuleNotFoundException("Rule not found with id: " + ruleId));
 
         rule.setStatus(Rule.Status.ACTIVE);
         rule.setUpdatedAt(Instant.now());
-        return ruleRepository.save(rule);
+        Rule savedRule = ruleRepository.save(rule);
+        return ruleMapper.toDto(savedRule);
     }
 
     @Transactional
-    public Rule deactivateRule(UUID ruleId) {
+    public RuleResponseDto deactivateRule(UUID ruleId) {
         Rule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new RuleNotFoundException("Rule not found with id: " + ruleId));
 
         rule.setStatus(Rule.Status.INACTIVE);
         rule.setUpdatedAt(Instant.now());
-        return ruleRepository.save(rule);
+        Rule savedRule = ruleRepository.save(rule);
+        return ruleMapper.toDto(savedRule);
     }
 
     public List<Rule> getAllRules() {

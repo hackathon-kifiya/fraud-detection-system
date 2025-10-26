@@ -265,7 +265,7 @@ export const ruleEngineAPI = {
 
   // Rule templates
   getLoanTemplate: () => ruleEngineApi.get("/api/rules/templates/loan"),
-  getTemplate: (dataType) => ruleEngineApi.get("/api/rules/templates", { params: { dataType } }),
+  getTemplate: () => ruleEngineApi.get("/api/rules/example/template"),
 
   // Data Type Management
   getAllDataTypes: (params) => ruleEngineApi.get("/api/data-types", { params }),

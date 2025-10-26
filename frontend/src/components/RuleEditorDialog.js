@@ -32,78 +32,6 @@ import {
 import { Editor } from "@monaco-editor/react";
 import { ruleEngineAPI } from "../services/api";
 
-const DRL_TEMPLATES = {
-  TRANSACTION: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "High Amount Transaction"
-when
-    $f: DynamicFact(
-        dataType == "transaction",
-        getDoubleProperty("amount") > 10000
-    )
-then
-    $f.addViolation("TXN_HIGH_AMOUNT", 20, "Transaction amount exceeds threshold");
-end`,
-
-  KYC: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Unverified KYC"
-when
-    $f: DynamicFact(
-        dataType == "kyc",
-        getBooleanProperty("verifiedStatus") == false
-    )
-then
-    $f.addViolation("KYC_UNVERIFIED", 15, "User is not KYC verified");
-end`,
-
-  LOAN: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "High Risk Loan"
-when
-    $f: DynamicFact(
-        dataType == "loan",
-        getDoubleProperty("amount") > 50000
-    )
-then
-    $f.addViolation("LOAN_HIGH_AMOUNT", 25, "Loan amount exceeds high risk threshold");
-end`,
-
-  CREDIT: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Low Credit Score"
-when
-    $f: DynamicFact(
-        dataType == "credit",
-        getIntProperty("score") < 600
-    )
-then
-    $f.addViolation("CREDIT_LOW_SCORE", 30, "Credit score below acceptable threshold");
-end`,
-
-  REPAYMENT: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Late Repayment"
-when
-    $f: DynamicFact(
-        dataType == "repayment",
-        getBooleanProperty("isLate") == true
-    )
-then
-    $f.addViolation("REPAYMENT_LATE", 25, "Repayment is late");
-end`,
-};
-
 const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -130,7 +58,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
           setFormData(prev => ({
             ...prev,
             dataType: firstType,
-            drlContent: DRL_TEMPLATES[firstType] || "",
+            drlContent: "",
           }));
         }
       } catch (error) {
@@ -157,7 +85,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
         description: "",
         dataType: defaultType,
         status: "DRAFT",
-        drlContent: DRL_TEMPLATES[defaultType] || "",
+        drlContent: "",
         changeDescription: "",
       });
     }
@@ -166,23 +94,13 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-    if (field === "dataType" && !rule) {
-      setFormData({
-        ...formData,
-        [field]: value,
-        drlContent: DRL_TEMPLATES[value] || "",
-      });
-    }
   };
 
   const handleLoadTemplate = async () => {
-    console.log("Load template clicked, dataType:", formData.dataType);
     try {
       setLoadingTemplate(true);
-      // Fetch template from API for all data types
-      console.log("Fetching template from API for:", formData.dataType);
-      const response = await ruleEngineAPI.getTemplate(formData.dataType);
-      console.log("API response:", response);
+      // Fetch template from API (no data type dependency)
+      const response = await ruleEngineAPI.getTemplate();
       
       // Update the drlContent from API response
       const templateContent = response.data?.drlContent || "";
@@ -232,6 +150,11 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
   const handleSave = async (activate = false) => {
     if (!formData.name.trim()) {
       onShowSnackbar("Rule name is required", "error");
+      return;
+    }
+
+    if (!formData.dataType || !formData.dataType.trim()) {
+      onShowSnackbar("Data type is required", "error");
       return;
     }
 
@@ -329,7 +252,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
+                <FormControl fullWidth required>
                   <InputLabel>Data Type</InputLabel>
                   <Select
                     value={formData.dataType}
@@ -337,6 +260,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                       handleInputChange("dataType", e.target.value)
                     }
                     label='Data Type'
+                    required
                   >
                     {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
                       <MenuItem key={dt.id} value={dt.name}>
