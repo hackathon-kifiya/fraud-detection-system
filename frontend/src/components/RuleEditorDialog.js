@@ -54,7 +54,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
         const types = response.data || [];
         setDataTypes(types);
         if (types.length > 0 && !rule) {
-          const firstType = types[0].name || "TRANSACTION";
+          const firstType = types[0].dataType || "TRANSACTION";
           setFormData(prev => ({
             ...prev,
             dataType: firstType,
@@ -263,8 +263,8 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                     required
                   >
                     {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
-                      <MenuItem key={dt.id} value={dt.name}>
-                        {dt.displayName || dt.name}
+                      <MenuItem key={dt.id} value={dt.dataType}>
+                        {dt.name}
                       </MenuItem>
                     ))}
                   </Select>

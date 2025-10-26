@@ -1,13 +1,58 @@
+"""Main application entry point."""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import os
 import logging
+from adapters.database.config_repository import PostgreSQLConfigRepository
+from adapters.database.data_type_repository import PostgreSQLDataTypeRepository
+from usecases.decision_service import DecisionService, ConfigService
+from adapters.api.routes import create_config_router, create_decision_router, create_data_type_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Risk Aggregation Engine", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for the application."""
+    # Startup
+    logger.info("Initializing decision service...")
+    
+    # Initialize repositories
+    config_repository = PostgreSQLConfigRepository()
+    data_type_repository = PostgreSQLDataTypeRepository()
+    
+    # Initialize databases
+    try:
+        config_repository.initialize_schema()
+        data_type_repository.initialize_schema()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+    
+    # Store repository in app state for dependency injection
+    app.state.config_repository = config_repository
+    app.state.data_type_repository = data_type_repository
+    
+    # Setup routes after repository is initialized
+    setup_routes()
+    
+    logger.info("Decision service initialized successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down decision service...")
+
+
+app = FastAPI(
+    title="Decision Service",
+    description="Configurable decision service that aggregates scores from rule engine, anomaly detection, and predictive engine",
+    version="0.1.0",
+    lifespan=lifespan
+)
 
 # CORS middleware
 app.add_middleware(
@@ -18,50 +63,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/health")
+
+# Dependency injection for services
+def get_config_service(app: FastAPI) -> ConfigService:
+    """Get configuration service."""
+    config_repository = app.state.config_repository
+    return ConfigService(config_repository)
+
+
+def get_decision_service(app: FastAPI) -> DecisionService:
+    """Get decision service."""
+    config_repository = app.state.config_repository
+    return DecisionService(config_repository)
+
+
+@app.get(
+    "/health",
+    summary="Health Check",
+    description="Check the health status of the decision service",
+    tags=["health"]
+)
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "risk-aggregation-engine"}
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "decision-service",
+        "version": "0.1.0"
+    }
 
-@app.get("/")
+
+@app.get(
+    "/",
+    summary="API Information",
+    description="Get API information and documentation links"
+)
 async def root():
-    """Root endpoint"""
-    return {"message": "Risk Aggregation Engine API", "version": "1.0.0"}
-
-@app.post("/aggregate")
-async def aggregate_risk(data: dict):
-    """Risk aggregation endpoint - placeholder implementation"""
-    logger.info(f"Received risk aggregation request: {data}")
-    
-    # Placeholder risk aggregation logic
-    risk_score = {
-        "overall_risk_score": 0.75,
-        "risk_level": "HIGH",
-        "factors": [
-            {"factor": "transaction_amount", "weight": 0.3, "score": 0.8},
-            {"factor": "user_behavior", "weight": 0.4, "score": 0.7},
-            {"factor": "location_anomaly", "weight": 0.3, "score": 0.8}
-        ],
-        "recommendation": "REVIEW_REQUIRED",
-        "confidence": 0.85
+    """Root endpoint."""
+    return {
+        "message": "Decision Service API",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "openapi": "/openapi.json",
+        "endpoints": {
+            "health": "/health",
+            "config_get": "GET /config",
+            "config_update": "POST /config",
+            "decide": "POST /decide"
+        }
     }
-    
-    return risk_score
 
-@app.post("/calculate")
-async def calculate_risk(data: dict):
-    """Risk calculation endpoint - placeholder implementation"""
-    logger.info(f"Received risk calculation request: {data}")
+
+# Register routers
+def setup_routes():
+    """Setup API routes."""
+    # Get services from app state
+    config_service = get_config_service(app)
+    decision_service = get_decision_service(app)
     
-    # Placeholder risk calculation logic
-    calculation = {
-        "risk_score": 0.65,
-        "risk_category": "MEDIUM",
-        "threshold_exceeded": False,
-        "next_review_date": "2024-01-15T10:00:00Z"
-    }
+    # Create routers
+    config_router = create_config_router(config_service, decision_service)
+    decision_router = create_decision_router(decision_service)
+    data_type_router = create_data_type_router()
     
-    return calculation
+    # Register routers
+    app.include_router(config_router, tags=["configuration"])
+    app.include_router(decision_router, tags=["decision"])
+    app.include_router(data_type_router, tags=["data-types"])
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -75,13 +75,6 @@ public class DataTypeManagementController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Delete a data type")
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDataType(@Parameter(description = "Data type UUID") @PathVariable("id") UUID id) {
-        dataTypeService.deleteDataType(id);
-        return ResponseEntity.noContent().build();
-    }
-
     @Operation(summary = "Activate a data type")
     @PostMapping("/{id}/activate")
     public ResponseEntity<DataTypeResponseDto> activateDataType(@Parameter(description = "Data type UUID") @PathVariable("id") UUID id) {

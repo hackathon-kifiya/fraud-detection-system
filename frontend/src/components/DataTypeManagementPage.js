@@ -32,7 +32,6 @@ import {
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   PlayArrow as ActivateIcon,
   Pause as DeactivateIcon,
   Refresh as RefreshIcon,
@@ -41,7 +40,7 @@ import {
   Cancel as InactiveIcon,
   Code as CodeIcon,
 } from "@mui/icons-material";
-import { ruleEngineAPI } from "../services/api";
+import { dataTypeAPI } from "../services/api";
 
 const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
@@ -49,7 +48,6 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const [filteredDataTypes, setFilteredDataTypes] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedDataType, setSelectedDataType] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -78,9 +76,9 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const loadDataTypes = async () => {
     setLoading(true);
     try {
-      const response = await ruleEngineAPI.getAllDataTypes();
-      setDataTypes(response.data || []);
-      setFilteredDataTypes(response.data || []);
+      const response = await dataTypeAPI.getAll({ limit: 100, offset: 0 });
+      setDataTypes(response.data.data_types || []);
+      setFilteredDataTypes(response.data.data_types || []);
     } catch (error) {
       onShowSnackbar("Failed to load data types: " + error.message, "error");
     } finally {
@@ -123,17 +121,18 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
     try {
       setLoading(true);
       const payload = {
-        name: formData.name,
-        displayName: formData.displayName,
+        data_type: formData.name,
+        name: formData.displayName || formData.name,
         description: formData.description,
-        schemaDefinition: JSON.parse(formData.schemaDefinition || "{}"),
+        schema_definition: JSON.parse(formData.schemaDefinition || "{}"),
+        status: "ACTIVE",
       };
 
       if (selectedDataType) {
-        await ruleEngineAPI.updateDataType(selectedDataType.id, payload);
+        await dataTypeAPI.update(selectedDataType.id, payload);
         onShowSnackbar("Data type updated successfully", "success");
       } else {
-        await ruleEngineAPI.createDataType(payload);
+        await dataTypeAPI.create(payload);
         onShowSnackbar("Data type created successfully", "success");
       }
       handleCloseDialog();
@@ -145,25 +144,11 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
     }
   };
 
-  const handleDelete = async () => {
-    try {
-      setLoading(true);
-      await ruleEngineAPI.deleteDataType(selectedDataType.id);
-      onShowSnackbar("Data type deleted successfully", "success");
-      setDeleteConfirmOpen(false);
-      setSelectedDataType(null);
-      loadDataTypes();
-    } catch (error) {
-      onShowSnackbar("Failed to delete data type: " + error.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleActivate = async (dataType) => {
     try {
       setLoading(true);
-      await ruleEngineAPI.activateDataType(dataType.id);
+      await dataTypeAPI.update(dataType.id, { status: "ACTIVE" });
       onShowSnackbar("Data type activated successfully", "success");
       loadDataTypes();
     } catch (error) {
@@ -176,7 +161,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const handleDeactivate = async (dataType) => {
     try {
       setLoading(true);
-      await ruleEngineAPI.deactivateDataType(dataType.id);
+      await dataTypeAPI.update(dataType.id, { status: "INACTIVE" });
       onShowSnackbar("Data type deactivated successfully", "success");
       loadDataTypes();
     } catch (error) {
@@ -370,18 +355,6 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
                             </IconButton>
                           </Tooltip>
                         )}
-                        <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              setSelectedDataType(dataType);
-                              setDeleteConfirmOpen(true);
-                            }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -444,23 +417,6 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSave} variant="contained" disabled={loading}>
             Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the data type "{selectedDataType?.name}"? This action
-            cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
           </Button>
         </DialogActions>
       </Dialog>

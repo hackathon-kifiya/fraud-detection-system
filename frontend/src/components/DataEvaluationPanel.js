@@ -84,8 +84,8 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
         if (types.length > 0) {
           // Set to the first active data type
           const activeType = types.find(dt => dt.status === 'ACTIVE') || types[0];
-          setDataType(activeType.name);
-          console.log("Setting initial dataType to:", activeType.name);
+          setDataType(activeType.dataType);
+          console.log("Setting initial dataType to:", activeType.dataType);
         }
       } catch (error) {
         console.error("Failed to load data types:", error);
@@ -102,25 +102,16 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
       console.log("Current dataType state:", dataType);
       console.log("Available dataTypes:", dataTypes);
       
-      // Find the selected data type object
-      const selectedDataTypeObj = dataTypes.find(dt => dt.name === dataType);
-      
-      console.log("Selected dataType object:", selectedDataTypeObj);
-      
-      if (!selectedDataTypeObj) {
-        console.error("Data type object not found for:", dataType);
-        throw new Error("Invalid data type selected");
-      }
-      
-      if (!selectedDataTypeObj.dataType) {
-        console.error("Data type field is missing:", selectedDataTypeObj);
-        throw new Error("Invalid data type structure");
+      // dataType is already set to the dataType field (like "transactions", "kyc")
+      if (!dataType) {
+        console.error("Data type not selected");
+        throw new Error("Please select a data type");
       }
 
-      console.log("Calling API with dataType:", selectedDataTypeObj.dataType);
+      console.log("Calling API with dataType:", dataType);
       
       // Fetch sample data from CSV
-      const response = await ruleEngineAPI.getSampleData(selectedDataTypeObj.dataType, 5);
+      const response = await ruleEngineAPI.getSampleData(dataType, 5);
       const sampleRecords = response.data || [];
       
       if (sampleRecords.length === 0) {
@@ -161,9 +152,10 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
       setError(error.response?.data?.message || error.message || "Failed to load sample data");
       onShowSnackbar("Failed to load sample data: " + (error.response?.data?.message || error.message), "error");
       
-      // Fallback to local sample data
+      // Fallback to local sample data (map lowercase dataType to uppercase key)
+      const dataTypeKey = dataType.toUpperCase();
       setTestData(
-        JSON.stringify(SAMPLE_DATA[dataType] || SAMPLE_DATA.TRANSACTION, null, 2)
+        JSON.stringify(SAMPLE_DATA[dataTypeKey] || SAMPLE_DATA.TRANSACTION, null, 2)
       );
     } finally {
       setLoadingSample(false);
@@ -192,28 +184,8 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
 
     try {
       let response;
-      switch (dataType) {
-        case "TRANSACTION":
-          response = await ruleEngineAPI.evaluateTransaction(facts);
-          break;
-        case "KYC":
-          response = await ruleEngineAPI.evaluateKYC(facts);
-          break;
-        case "LOAN":
-          response = await ruleEngineAPI.evaluateLoan(facts);
-          break;
-        case "CREDIT":
-          response = await ruleEngineAPI.evaluateCredit(facts);
-          break;
-        case "REPAYMENT":
-          response = await ruleEngineAPI.evaluateRepayment(facts);
-          break;
-        default:
-          // Find the selected data type object to get the actual dataType value
-          const selectedDataTypeObj = dataTypes.find(dt => dt.name === dataType);
-          const actualDataType = selectedDataTypeObj?.dataType || dataType.toLowerCase();
-          response = await ruleEngineAPI.evaluateGeneric(actualDataType, facts);
-      }
+      // Use the generic evaluation endpoint with the dataType identifier
+      response = await ruleEngineAPI.evaluateGeneric(dataType, facts);
 
       // Store the evaluation result
       setEvaluationResult(response.data);
@@ -258,8 +230,8 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
                 label='Data Type'
               >
                 {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
-                  <MenuItem key={dt.id} value={dt.name}>
-                    {dt.displayName || dt.name}
+                  <MenuItem key={dt.id} value={dt.dataType}>
+                    {dt.name}
                   </MenuItem>
                 ))}
               </Select>

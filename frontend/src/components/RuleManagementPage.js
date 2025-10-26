@@ -353,8 +353,8 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
             >
               <MenuItem value=''>All Types</MenuItem>
               {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
-                <MenuItem key={dt.id} value={dt.name}>
-                  {dt.displayName || dt.name}
+                <MenuItem key={dt.id} value={dt.dataType}>
+                  {dt.name}
                 </MenuItem>
               ))}
             </Select>

@@ -140,22 +140,8 @@ public class DataTypeService {
 
     @Transactional
     public void deleteDataType(UUID dataTypeId) {
-        DataType dataType = dataTypeRepository.findById(dataTypeId)
-                .orElseThrow(() -> new DataTypeNotFoundException("Data type not found with id: " + dataTypeId));
-
-        // Check if any rules reference this data type
-        long ruleCount = ruleRepository.findByDataType(dataType.getDataType()).size();
-        if (ruleCount > 0) {
-            throw new ValidationException(
-                String.format("Cannot delete data type '%s' because it is referenced by %d rule(s)", 
-                    dataType.getDataType(), ruleCount)
-            );
-        }
-
-        // Soft delete - set status to inactive
-        dataType.setStatus(DataType.Status.INACTIVE);
-        dataType.setUpdatedAt(Instant.now());
-        dataTypeRepository.save(dataType);
+        // Data type deletion is disabled
+        throw new ValidationException("Data type deletion is not allowed. Use deactivate instead.");
     }
 
     @Transactional

@@ -6,6 +6,9 @@ const API_BASE_URL =
 const RULE_ENGINE_URL =
   process.env.REACT_APP_RULE_ENGINE_URL || "http://localhost:8081";
 
+const DECISION_SERVICE_URL =
+  process.env.REACT_APP_DECISION_SERVICE_URL || "http://localhost:5003";
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -16,6 +19,14 @@ const api = axios.create({
 
 const ruleEngineApi = axios.create({
   baseURL: RULE_ENGINE_URL,
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+const decisionServiceApi = axios.create({
+  baseURL: DECISION_SERVICE_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -166,6 +177,30 @@ export const auditAPI = {
 };
 
 // Admin endpoints
+// Data Type Management endpoints (backend API)
+export const dataTypeAPI = {
+  // Get all data types with pagination
+  getAll: (params) => api.get("/api/data-types", { params }),
+  
+  // Get single data type by ID
+  getById: (id) => api.get(`/api/data-types/${id}`),
+  
+  // Get data type by name
+  getByName: (name) => api.get(`/api/data-types/name/${name}`),
+  
+  // Get active data types (public)
+  getActive: () => api.get("/api/data-types/active"),
+  
+  // Search data types
+  search: (query) => api.get("/api/data-types/search", { params: { q: query } }),
+  
+  // Create data type
+  create: (data) => api.post("/api/data-types", data),
+  
+  // Update data type
+  update: (id, data) => api.put(`/api/data-types/${id}`, data),
+};
+
 export const adminAPI = {
   // Performance Reports
   generatePerformanceReport: (data) =>
@@ -267,24 +302,29 @@ export const ruleEngineAPI = {
   getLoanTemplate: () => ruleEngineApi.get("/api/rules/templates/loan"),
   getTemplate: () => ruleEngineApi.get("/api/rules/example/template"),
 
-  // Data Type Management
-  getAllDataTypes: (params) => ruleEngineApi.get("/api/data-types", { params }),
-  getDataType: (id) => ruleEngineApi.get(`/api/data-types/${id}`),
-  getDataTypeByName: (name) => ruleEngineApi.get(`/api/data-types/by-name/${name}`),
-  createDataType: (data) => ruleEngineApi.post("/api/data-types", data),
-  updateDataType: (id, data) => ruleEngineApi.put(`/api/data-types/${id}`, data),
-  deleteDataType: (id) => ruleEngineApi.delete(`/api/data-types/${id}`),
-  activateDataType: (id) => ruleEngineApi.post(`/api/data-types/${id}/activate`),
-  deactivateDataType: (id) => ruleEngineApi.post(`/api/data-types/${id}/deactivate`),
-  getSampleData: (dataType, limit) =>
-    ruleEngineApi.get(`/api/data-types/${dataType}/sample-data`, { params: { limit } }),
+  // Data Type Management (Rule Engine)
+  getAllDataTypes: () => ruleEngineApi.get("/api/data-types"),
+  getSampleData: (dataType, limit) => ruleEngineApi.get(`/api/data-types/${dataType}/sample-data`, { params: { limit } }),
 
   // Rule evaluation
   evaluateGeneric: (dataType, facts) =>
     ruleEngineApi.post("/api/evaluate/", { dataType, facts }),
 };
 
-// Risk Aggregation endpoints
+// Decision Service endpoints
+export const decisionServiceAPI = {
+  // Configuration
+  getConfig: () => decisionServiceApi.get("/config"),
+  updateConfig: (data) => decisionServiceApi.post("/config", data),
+  
+  // Decision making
+  makeDecision: (data) => decisionServiceApi.post("/decide", data),
+  
+  // Health check
+  health: () => decisionServiceApi.get("/health"),
+};
+
+// Risk Aggregation endpoints (deprecated, use decisionServiceAPI)
 export const riskAggregationAPI = {
   // Risk decision parameters
   getParameters: () => api.get("/api/risk/parameters"),

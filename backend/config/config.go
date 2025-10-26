@@ -10,6 +10,9 @@ type Config struct {
 	RuleEngineURL             string
 	AnomalyDetectionEngineURL string
 	PredictiveEngineURL       string
-	RiskAggregationEngineURL  string
+	DecisionServiceURL        string
+	DataManagementServiceURL  string
 	PythonStatsURL            string
+	EnableSwagger             bool
+	CorsAllowedOrigins        string
 }

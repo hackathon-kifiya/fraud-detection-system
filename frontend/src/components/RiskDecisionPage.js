@@ -37,7 +37,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Assessment as AssessmentIcon,
 } from "@mui/icons-material";
-import { riskAggregationAPI } from "../services/api";
+import { decisionServiceAPI } from "../services/api";
 
 const RiskDecisionPage = ({ onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
@@ -62,11 +62,27 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
   const loadRiskParameters = async () => {
     try {
       setLoading(true);
-      // In a real implementation, this would fetch from backend
-      // const response = await riskAggregationAPI.getParameters();
-      // setRiskParams(response.data);
+      const response = await decisionServiceAPI.getConfig();
+      const config = response.data;
+      
+      setRiskParams({
+        autoRejectThreshold: config.auto_reject_threshold,
+        autoApproveThreshold: config.auto_approve_threshold,
+        humanReviewMin: config.auto_approve_threshold,
+        humanReviewMax: config.auto_reject_threshold,
+      });
+      
+      setEngineWeights({
+        ruleEngine: config.rule_engine_weight,
+        anomalyDetection: config.anomaly_detection_weight,
+        predictiveModel: config.predictive_engine_weight,
+      });
+      
+      setIsModelBased(config.model_based_scoring);
+      setIsThresholdModelBased(config.model_based_thresholds);
     } catch (error) {
       onShowSnackbar("Failed to load risk parameters", "error");
+      console.error("Error loading config:", error);
     } finally {
       setLoading(false);
     }
@@ -122,16 +138,16 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
       setSaving(true);
 
       const configData = {
-        ...riskParams,
-        scoringType: isModelBased ? "model_based" : "linear",
-        selectedModel: isModelBased ? selectedModel : null,
-        engineWeights: isModelBased ? null : engineWeights,
-        thresholdType: isThresholdModelBased ? "model_based" : "manual",
-        updatedAt: new Date().toISOString(),
+        model_based_thresholds: isThresholdModelBased,
+        auto_approve_threshold: riskParams.autoApproveThreshold,
+        auto_reject_threshold: riskParams.autoRejectThreshold,
+        model_based_scoring: isModelBased,
+        rule_engine_weight: engineWeights.ruleEngine,
+        anomaly_detection_weight: engineWeights.anomalyDetection,
+        predictive_engine_weight: engineWeights.predictiveModel,
       };
 
-      // In a real implementation, this would save to backend
-      // await riskAggregationAPI.updateParameters(configData);
+      await decisionServiceAPI.updateConfig(configData);
 
       const message = isModelBased
         ? `Risk decision parameters saved successfully with ${selectedModel} model`
@@ -139,7 +155,8 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
 
       onShowSnackbar(message, "success");
     } catch (error) {
-      onShowSnackbar("Failed to save risk parameters", "error");
+      console.error("Error saving config:", error);
+      onShowSnackbar("Failed to save risk parameters: " + (error.response?.data?.detail || error.message), "error");
     } finally {
       setSaving(false);
     }

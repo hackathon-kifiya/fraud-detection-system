@@ -1,6 +1,7 @@
 package router
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -9,12 +10,31 @@ import (
 
 var engine *gin.Engine
 
-func Init() *gin.Engine {
+type RouterConfig struct {
+	AllowedOrigins string
+}
+
+func Init(cfg *RouterConfig) *gin.Engine {
 	engine = gin.Default()
+
+	// Parse allowed origins from config
+	var allowOrigins []string
+	if cfg != nil && cfg.AllowedOrigins != "" {
+		// Split by comma and clean up whitespace
+		origins := strings.Split(cfg.AllowedOrigins, ",")
+		for _, origin := range origins {
+			allowOrigins = append(allowOrigins, strings.TrimSpace(origin))
+		}
+	}
+
+	// Default origins if none provided
+	if len(allowOrigins) == 0 {
+		allowOrigins = []string{"http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"}
+	}
 
 	// Configure CORS
 	config := cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"},
+		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -40,4 +60,16 @@ func RegisterHealthEndpoint() {
 				"version":      "v0.1.0"})
 		})
 	}
+}
+
+func RegisterSwaggerEndpoint(r *gin.Engine) {
+	// Swagger JSON endpoint
+	r.GET("/swagger/doc.json", func(c *gin.Context) {
+		c.JSON(200, getSwaggerJSON())
+	})
+
+	// Swagger UI endpoint - use a different path to avoid conflict
+	r.GET("/swagger", func(c *gin.Context) {
+		c.HTML(200, "text/html", getSwaggerUI())
+	})
 }

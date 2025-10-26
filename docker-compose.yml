@@ -38,12 +38,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  risk-aggregation-engine:
-    build: ./risk-aggregation-engine
+  decision-service:
+    build: ./decision
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
     ports:
       - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  data-management-service:
+    build: ./data-management-service
+    environment:
+      - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    ports:
+      - "5004:5004"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,8 +84,11 @@ services:
       - ENGINE_URL=http://rule-engine:8081
       - ANOMALY_DETECTION_ENGINE_URL=http://anomaly-detection-engine:5001
       - PREDICTIVE_ENGINE_URL=http://prediction-engine:5002
-      - RISK_AGGREGATION_ENGINE_URL=http://risk-aggregation-engine:5003
+      - DECISION_SERVICE_URL=http://decision-service:5003
+      - DATA_MANAGEMENT_SERVICE_URL=http://data-management-service:5004
       - PYTHON_STATS_URL=http://anomaly-detection-engine:5001
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://frontend:3000,http://frontend:3001
+      - ENABLE_SWAGGER=true
     ports:
       - "8080:8080"
     depends_on:
@@ -86,7 +100,9 @@ services:
         condition: service_started
       prediction-engine:
         condition: service_started
-      risk-aggregation-engine:
+      decision-service:
+        condition: service_started
+      data-management-service:
         condition: service_started
     restart: unless-stopped
 
@@ -96,6 +112,7 @@ services:
       args:
         - REACT_APP_BACKEND_URL=http://localhost:8080
         - REACT_APP_RULE_ENGINE_URL=http://localhost:8081
+        - REACT_APP_DECISION_SERVICE_URL=http://localhost:5003
     ports:
       - "3000:3000"
     depends_on:

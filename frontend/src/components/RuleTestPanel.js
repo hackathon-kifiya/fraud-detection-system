@@ -84,7 +84,7 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
         const response = await ruleEngineAPI.getAllDataTypes();
         setDataTypes(response.data || []);
         if (response.data && response.data.length > 0) {
-          setDataType(response.data[0].name);
+          setDataType(response.data[0].dataType);
         }
       } catch (error) {
         console.error("Failed to load data types:", error);

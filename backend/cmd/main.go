@@ -11,6 +11,7 @@ import (
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/database"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/repository"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/api/handler"
+	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/port"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/service"
 	"gorm.io/gorm"
 )
@@ -27,8 +28,11 @@ func main() {
 	flag.StringVar(&cfg.RuleEngineURL, "rule_engine_url", "", "rule engine URL")
 	flag.StringVar(&cfg.AnomalyDetectionEngineURL, "anomaly_detection_engine_url", "", "anomaly detection engine URL")
 	flag.StringVar(&cfg.PredictiveEngineURL, "predictive_engine_url", "", "predictive engine URL")
-	flag.StringVar(&cfg.RiskAggregationEngineURL, "risk_aggregation_engine_url", "", "risk aggregation engine URL")
+	flag.StringVar(&cfg.DecisionServiceURL, "decision_service_url", "", "decision service URL")
+	flag.StringVar(&cfg.DataManagementServiceURL, "data_management_service_url", "", "data management service URL")
 	flag.StringVar(&cfg.PythonStatsURL, "python_stats_url", "", "python stats URL")
+	flag.BoolVar(&cfg.EnableSwagger, "swagger", true, "enable swagger documentation")
+	flag.StringVar(&cfg.CorsAllowedOrigins, "cors_origins", "", "comma-separated list of allowed CORS origins")
 	flag.BoolVar(&seedDB, "seed", false, "seed database with sample data and exit")
 	flag.Parse()
 
@@ -79,12 +83,24 @@ func main() {
 	// ruleEngineClient := client.NewRuleEngineClient(cfg.RuleEngineURL)
 	anomalyDetectionClient := client.NewAnomalyDetectionEngineClient(cfg.AnomalyDetectionEngineURL)
 	predictiveEngineClient := client.NewPredictiveEngineClient(cfg.PredictiveEngineURL)
-	riskAggregationClient := client.NewRiskAggregationEngineClient(cfg.RiskAggregationEngineURL)
+	decisionServiceClient := client.NewDecisionServiceClient(cfg.DecisionServiceURL)
+
+	// Initialize data management service client for reading data types
+	var dataManagementClient *client.DataManagementClient
+	var dataTypeRepo port.DataTypeRepository
+	if cfg.DataManagementServiceURL != "" {
+		dataManagementClient = client.NewDataManagementClient(cfg.DataManagementServiceURL)
+		dataTypeRepo = client.NewDataTypeRepositoryAdapter(dataManagementClient)
+		log.Printf("Data types will be fetched from Data Management Service: %s", cfg.DataManagementServiceURL)
+	} else {
+		log.Println("Data Management service URL not provided - data type operations will fail")
+		// Fallback to database (deprecated)
+		dataTypeRepo = repository.NewDataTypeRepository(db)
+	}
 
 	// Initialize clients (for future use)
 	_ = anomalyDetectionClient
 	_ = predictiveEngineClient
-	_ = riskAggregationClient
 
 	// Initialize services
 
@@ -97,12 +113,21 @@ func main() {
 	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
 	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
 	callbackService := service.NewCallbackService(callbackRepo)
+	dataTypeService := service.NewDataTypeService(dataTypeRepo)
 
-	// Initialize router
-	r := router.Init()
+	// Initialize router with CORS configuration
+	routerCfg := &router.RouterConfig{
+		AllowedOrigins: cfg.CorsAllowedOrigins,
+	}
+	r := router.Init(routerCfg)
 
 	// Register health endpoint
 	router.RegisterHealthEndpoint()
+
+	// Register swagger if enabled
+	if cfg.EnableSwagger {
+		router.RegisterSwaggerEndpoint(r)
+	}
 
 	// Initialize handlers
 	handler.InitUserHandler(userService, r)
@@ -110,6 +135,8 @@ func main() {
 	handler.InitAuditHandler(auditService, r)
 	handler.InitAdminHandler(adminService, r)
 	handler.InitCallbackHandler(callbackService, r)
+	handler.InitDecisionHandler(decisionServiceClient, r)
+	handler.InitDataTypeHandler(dataTypeService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

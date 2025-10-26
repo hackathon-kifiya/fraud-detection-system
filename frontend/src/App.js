@@ -158,24 +158,16 @@ function AppContent({ isActiveRoute }) {
           path: "/auditors",
         },
         {
+          key: "data-type-management",
+          label: "Data Type Management",
+          icon: DataTypeManagementIcon,
+          path: "/data-types",
+        },
+        {
           key: "rule-engine",
           label: "Rule Engine Management",
           icon: RuleManagementIcon,
-          path: null,
-          subItems: [
-            {
-              key: "rule-management",
-              label: "Rule Management",
-              icon: RuleManagementIcon,
-              path: "/rules",
-            },
-            {
-              key: "data-type-management",
-              label: "Data Type Management",
-              icon: DataTypeManagementIcon,
-              path: "/rules/data-types",
-            },
-          ],
+          path: "/rules",
         },
         {
           key: "risk-decision",
@@ -249,24 +241,16 @@ function AppContent({ isActiveRoute }) {
           path: "/auditors",
         },
         {
+          key: "data-type-management",
+          label: "Data Type Management",
+          icon: DataTypeManagementIcon,
+          path: "/data-types",
+        },
+        {
           key: "rule-engine",
           label: "Rule Engine Management",
           icon: RuleManagementIcon,
-          path: null,
-          subItems: [
-            {
-              key: "rule-management",
-              label: "Rule Management",
-              icon: RuleManagementIcon,
-              path: "/rules",
-            },
-            {
-              key: "data-type-management",
-              label: "Data Type Management",
-              icon: DataTypeManagementIcon,
-              path: "/rules/data-types",
-            },
-          ],
+          path: "/rules",
         },
         {
           key: "risk-decision",
@@ -802,7 +786,7 @@ function AppContent({ isActiveRoute }) {
                 element={<RuleManagementPage onShowSnackbar={showSnackbar} />}
               />
               <Route
-                path='/rules/data-types'
+                path='/data-types'
                 element={<DataTypeManagementPage onShowSnackbar={showSnackbar} />}
               />
               <Route
