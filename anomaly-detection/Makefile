@@ -2,43 +2,58 @@
 
 help:
 	@echo "Available commands:"
+	@echo ""
+	@echo "Setup & Installation:"
 	@echo "  make install       - Install production dependencies"
 	@echo "  make install-dev   - Install development dependencies"
+	@echo "  make setup-dev     - Setup complete development environment"
+	@echo ""
+	@echo "Development:"
+	@echo "  make run           - Run the application"
 	@echo "  make test          - Run tests"
 	@echo "  make test-cov      - Run tests with coverage"
-	@echo "  make run           - Run the application"
-	@echo "  make docker-build  - Build Docker image"
-	@echo "  make docker-run    - Run Docker container"
 	@echo "  make lint          - Run linters"
 	@echo "  make format        - Format code"
 	@echo "  make clean         - Clean generated files"
-	@echo "  make generate-data - Generate synthetic training data"
-	@echo "  make train-models  - Train all ML models"
-	@echo "  make train-kyc     - Train KYC model only"
-	@echo "  make train-business - Train Business model only"
-	@echo "  make train-transaction - Train Transaction model only"
-	@echo "  make train-combined - Train Combined model only"
-	@echo "  make train-customer - Train Customer model only"
-	@echo "  make evaluate-all  - Evaluate all models"
-	@echo "  make setup-dev     - Setup complete development environment"
-	@echo "  make demo          - Run complete demo (generate + train + evaluate)"
+	@echo ""
+	@echo "Data & Training:"
+	@echo "  make generate-data      - Generate synthetic training data"
+	@echo "  make train-models       - Train all models (supervised + unsupervised)"
+	@echo "  make train-unsupervised - Train unsupervised models (Isolation Forest)"
+	@echo "  make train-supervised   - Train supervised models (Random Forest)"
+	@echo "  make train-transaction  - Train Transaction model only"
+	@echo "  make train-merged       - Train Merged (KYC+Business) model only"
+	@echo "  make train-customer     - Train Customer model only"
+	@echo "  make evaluate-all       - Evaluate all models"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build       - Build Docker image"
+	@echo "  make docker-run         - Run Docker container"
+	@echo "  make docker-compose-up  - Start with docker-compose"
+	@echo "  make docker-compose-down - Stop docker-compose"
+	@echo ""
+	@echo "Documentation:"
 	@echo "  make docs-serve    - Serve documentation locally"
 	@echo "  make docs-build    - Build documentation site"
+	@echo ""
+	@echo "Workflows:"
+	@echo "  make demo          - Run complete demo (generate + train + evaluate)"
+	@echo "  make quick-start   - Quick start with small dataset"
 
 install:
-	pip install -r requirements.txt
+	.venv/bin/pip install -r requirements.txt
 
 install-dev:
-	pip install -r requirements-dev.txt
+	.venv/bin/pip install -r requirements-dev.txt
 
 test:
-	pytest tests/ -v
+	.venv/bin/pytest tests/ -v
 
 test-cov:
-	pytest tests/ --cov=app --cov-report=html --cov-report=term
+	.venv/bin/pytest tests/ --cov=app --cov-report=html --cov-report=term
 
 run:
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 docker-build:
 	docker build -f docker/Dockerfile -t kyc-anomaly-api:latest .
@@ -53,13 +68,13 @@ docker-compose-down:
 	cd docker && docker-compose down
 
 lint:
-	flake8 app/ scripts/
-	pylint app/
-	mypy app/
+	.venv/bin/flake8 app/ scripts/
+	.venv/bin/pylint app/
+	.venv/bin/mypy app/
 
 format:
-	black app/  scripts/
-	isort app/ scripts/
+	.venv/bin/black app/  scripts/
+	.venv/bin/isort app/ scripts/
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
@@ -77,59 +92,75 @@ clean:
 
 generate-data:
 	@echo "Generating synthetic training data..."
-	python scripts/generate_synthetic_data.py --samples 8999 --anomaly-fraction 0.1
+	.venv/bin/python scripts/generate_synthetic_data.py --samples 8999 --anomaly-fraction 0.1
 
 generate-data-large:
 	@echo "Generating large synthetic dataset..."
-	python scripts/generate_synthetic_data.py --kyc-samples 100000 --transaction-samples 500000 --anomaly-fraction 0.1
+	.venv/bin/python scripts/generate_synthetic_data.py --kyc-samples 100000 --transaction-samples 500000 --anomaly-fraction 0.1
 
 train-models:
-	@echo "Training all models..."
-	python scripts/train_models.py
+	@echo "Training all models (supervised + unsupervised)..."
+	@.venv/bin/python -m app.ml.training --mode all
 
-train-kyc:
-	@echo "Training KYC model..."
-	python scripts/train_models.py --train-kyc --kyc-data data/raw/kyc_training_data.csv
+train-unsupervised:
+	@echo "Training unsupervised models (Isolation Forest)..."
+	@.venv/bin/python -m app.ml.training --mode unsupervised
 
-train-business:
-	@echo "Training Business model..."
-	python scripts/train_models.py --train-business --business-data data/raw/business_training_data.csv
+train-supervised:
+	@echo "Training supervised models (Random Forest)..."
+	@.venv/bin/python -m app.ml.training --mode supervised
 
 train-transaction:
-	@echo "Training Transaction model..."
-	python scripts/train_models.py --train-transaction --transaction-data data/raw/transaction_training_data.csv
+	@echo "Training Transaction model (unsupervised)..."
+	@.venv/bin/python -m app.ml.training --mode unsupervised --model transaction
 
-train-combined:
-	@echo "Training Combined KYC+Business model..."
-	python scripts/train_models.py --train-merged --merged-data data/raw/kyc_business_training_data.csv
+train-merged:
+	@echo "Training Merged KYC+Business model (unsupervised)..."
+	@.venv/bin/python -m app.ml.training --mode unsupervised --model merged
 
 train-customer:
-	@echo "Training Customer model..."
-	python scripts/train_models.py --train-customer --transaction-data data/raw/transaction_training_data.csv
+	@echo "Training Customer model (unsupervised)..."
+	@.venv/bin/python -m app.ml.training --mode unsupervised --model customer
+
+# Legacy targets (deprecated - kept for backwards compatibility)
+train-kyc:
+	@echo "⚠️  DEPRECATED: Use 'make train-unsupervised' instead"
+	@echo "Training all unsupervised models..."
+	python -m app.ml.training --mode unsupervised
+
+train-business:
+	@echo "⚠️  DEPRECATED: Business model is part of merged model"
+	@echo "Training merged model..."
+	python -m app.ml.training --mode unsupervised --model merged
+
+train-combined:
+	@echo "⚠️  DEPRECATED: Use 'make train-merged' instead"
+	@echo "Training merged model..."
+	python -m app.ml.training --mode unsupervised --model merged
 
 evaluate-all:
 	@echo "Evaluating all models..."
-	python scripts/evaluate_models.py --model-type all
+	.venv/bin/python scripts/evaluate_models.py --model-type all
 
 evaluate-kyc:
 	@echo "Evaluating KYC model..."
-	python scripts/evaluate_models.py --model-type kyc --test-data data/raw/kyc_training_data.csv
+	.venv/bin/python scripts/evaluate_models.py --model-type kyc --test-data data/raw/kyc_training_data.csv
 
 evaluate-business:
 	@echo "Evaluating Business model..."
-	python scripts/evaluate_models.py --model-type business --test-data data/raw/business_training_data.csv
+	.venv/bin/python scripts/evaluate_models.py --model-type business --test-data data/raw/business_training_data.csv
 
 evaluate-transaction:
 	@echo "Evaluating Transaction model..."
-	python scripts/evaluate_models.py --model-type transaction --test-data data/raw/transaction_training_data.csv
+	.venv/bin/python scripts/evaluate_models.py --model-type transaction --test-data data/raw/transaction_training_data.csv
 
 evaluate-combined:
 	@echo "Evaluating Combined model..."
-	python scripts/evaluate_models.py --model-type combined --test-data data/raw/kyc_business_training_data.csv
+	.venv/bin/python scripts/evaluate_models.py --model-type combined --test-data data/raw/kyc_business_training_data.csv
 
 evaluate-customer:
 	@echo "Evaluating Customer model..."
-	python scripts/evaluate_models.py --model-type customer --test-data data/raw/transaction_training_data.csv
+	.venv/bin/python scripts/evaluate_models.py --model-type customer --test-data data/raw/transaction_training_data.csv
 
 setup-dev:
 	@echo "Setting up development environment..."
@@ -162,8 +193,8 @@ demo:
 
 quick-start:
 	@echo "Quick Start - Small Dataset"
-	python scripts/generate_synthetic_data.py --kyc-samples 1000 --transaction-samples 5000
-	python scripts/train_models.py
+	.venv/bin/python scripts/generate_synthetic_data.py --kyc-samples 1000 --transaction-samples 5000
+	.venv/bin/python -m app.ml.training --mode unsupervised
 	@echo "✓ Quick start complete! Run 'make run' to start the API"
 
 docs-serve:
