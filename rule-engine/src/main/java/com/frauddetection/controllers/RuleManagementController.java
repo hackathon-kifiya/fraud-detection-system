@@ -22,7 +22,6 @@ public class RuleManagementController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> createRule(@RequestBody RuleRequestDto request) {
         Rule rule = ruleManagementService.createRule(request);
-
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "Rule created successfully");
