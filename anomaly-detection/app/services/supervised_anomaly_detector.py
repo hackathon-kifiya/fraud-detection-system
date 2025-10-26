@@ -452,49 +452,32 @@ class SupervisedAnomalyDetectorService:
         return customer_flagged, customer_anomaly_score, customer_risk_level, transaction_results
 
     def _extract_kyc_features(self, data: KYCData) -> np.ndarray:
-        """Extract features from KYC data"""
-        return np.array(
-            [
-                [
-                    data.age,
-                    data.annual_income,
-                    data.num_accounts,
-                    data.account_age_days,
-                    data.num_transactions_last_30d,
-                    data.avg_transaction_amount,
-                ]
-            ]
-        )
+        """Extract KYC features using feature engineering pipeline"""
+        # Convert Pydantic model to DataFrame
+        data_dict = data.model_dump()
+        df = pd.DataFrame([data_dict])
+        
+        # Use existing feature engineering function
+        from app.ml.preprocessing.feature_engineering.prepare_merged_data import prepare_kyc_features
+        features = prepare_kyc_features(df)
+        return features
 
     def _extract_transaction_features(self, data: TransactionData) -> np.ndarray:
-        """Extract features from transaction data"""
-        transaction_type_map = {
-            "purchase": 0,
-            "withdrawal": 1,
-            "transfer": 2,
-            "deposit": 3,
-        }
-
-        return np.array(
-            [
-                [
-                    data.amount,
-                    transaction_type_map[data.transaction_type],
-                    data.hour_of_day,
-                    data.day_of_week,
-                    data.distance_from_home,
-                    int(data.is_online),
-                    data.num_transactions_last_24h,
-                    data.avg_amount_last_30d,
-                ]
-            ]
-        )
+        """Extract transaction features using feature engineering pipeline"""
+        # Convert Pydantic model to DataFrame
+        data_dict = data.model_dump()
+        df = pd.DataFrame([data_dict])
+        
+        # Use existing feature engineering function
+        from app.ml.preprocessing.feature_engineering.prepare_transaction import prepare_transaction_features
+        features = prepare_transaction_features(df)
+        return features
 
     def _calculate_risk_level(self, probability: float) -> RiskLevel:
-        """Calculate risk level based on anomaly probability"""
-        if probability >= settings.HIGH_RISK_THRESHOLD:
+        """Calculate risk level based on anomaly probability (0-1)"""
+        if probability >= settings.SUPERVISED_HIGH_RISK_THRESHOLD:
             return RiskLevel.HIGH
-        elif probability >= settings.MEDIUM_RISK_THRESHOLD:
+        elif probability >= settings.SUPERVISED_MEDIUM_RISK_THRESHOLD:
             return RiskLevel.MEDIUM
         else:
             return RiskLevel.LOW

@@ -27,10 +27,15 @@ help:
 	@echo "  make evaluate-all       - Evaluate all models"
 	@echo ""
 	@echo "Docker:"
-	@echo "  make docker-build       - Build Docker image"
-	@echo "  make docker-run         - Run Docker container"
-	@echo "  make docker-compose-up  - Start with docker-compose"
-	@echo "  make docker-compose-down - Stop docker-compose"
+	@echo "  make docker-build          - Build production Docker image"
+	@echo "  make docker-build-dev      - Build development Docker image"
+	@echo "  make docker-run            - Run production container"
+	@echo "  make docker-run-dev        - Run development container (hot reload)"
+	@echo "  make docker-compose-up    - Start services with docker-compose"
+	@echo "  make docker-compose-up-dev - Start development environment"
+	@echo "  make docker-compose-down  - Stop docker-compose"
+	@echo "  make docker-compose-logs  - Show API logs"
+	@echo "  make docker-clean         - Clean Docker images and containers"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs-serve    - Serve documentation locally"
@@ -56,16 +61,41 @@ run:
 	.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 docker-build:
-	docker build -f docker/Dockerfile -t kyc-anomaly-api:latest .
+	@echo "Building production Docker image..."
+	docker build -f docker/Dockerfile -t anomaly-detection-api:latest .
+
+docker-build-dev:
+	@echo "Building development Docker image..."
+	docker build -f docker/Dockerfile.dev -t anomaly-detection-api:dev .
 
 docker-run:
-	docker run -d -p 8000:8000 --name kyc-api kyc-anomaly-api:latest
+	@echo "Running production container..."
+	docker run -d -p 8000:8000 --name anomaly-api anomaly-detection-api:latest
+
+docker-run-dev:
+	@echo "Running development container with hot reload..."
+	docker run -d -p 8001:8000 -v $(PWD):/app --name anomaly-api-dev anomaly-detection-api:dev
 
 docker-compose-up:
+	@echo "Starting services with docker-compose..."
 	cd docker && docker-compose up -d
 
+docker-compose-up-dev:
+	@echo "Starting development environment..."
+	cd docker && docker-compose --profile dev up -d api-dev
+
 docker-compose-down:
+	@echo "Stopping docker-compose services..."
 	cd docker && docker-compose down
+
+docker-compose-logs:
+	@echo "Showing docker-compose logs..."
+	cd docker && docker-compose logs -f api
+
+docker-clean:
+	@echo "Cleaning Docker images and containers..."
+	docker-compose -f docker/docker-compose.yml down
+	docker rmi anomaly-detection-api:latest anomaly-detection-api:dev 2>/dev/null || true
 
 lint:
 	.venv/bin/flake8 app/ scripts/

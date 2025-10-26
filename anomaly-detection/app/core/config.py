@@ -60,7 +60,15 @@ class Settings(BaseSettings):
     N_ESTIMATORS: int = 100
     RANDOM_STATE: int = 42
 
-    # Anomaly Thresholds
+    # Anomaly Thresholds - Unsupervised (Isolation Forest scores are negative)
+    UNSUPERVISED_HIGH_RISK_THRESHOLD: float = -0.3
+    UNSUPERVISED_MEDIUM_RISK_THRESHOLD: float = -0.1
+
+    # Anomaly Thresholds - Supervised (Random Forest probabilities 0-1)
+    SUPERVISED_HIGH_RISK_THRESHOLD: float = 0.7  # >= 70% probability = HIGH
+    SUPERVISED_MEDIUM_RISK_THRESHOLD: float = 0.5  # >= 50% probability = MEDIUM
+
+    # Legacy thresholds (deprecated, use UNSUPERVISED_* above)
     HIGH_RISK_THRESHOLD: float = -0.3
     MEDIUM_RISK_THRESHOLD: float = -0.1
 

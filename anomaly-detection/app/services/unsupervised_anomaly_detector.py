@@ -284,43 +284,26 @@ class UnsupervisedAnomalyDetectorService:
         return np.random.randn(n_samples, 10)
 
     def extract_kyc_features(self, data: KYCData) -> np.ndarray:
-        """Extract features from KYC data"""
-        return np.array(
-            [
-                [
-                    data.age,
-                    data.annual_income,
-                    data.num_accounts,
-                    data.account_age_days,
-                    data.num_transactions_last_30d,
-                    data.avg_transaction_amount,
-                ]
-            ]
-        )
+        """Extract KYC features using feature engineering pipeline"""
+        # Convert Pydantic model to DataFrame
+        data_dict = data.model_dump()
+        df = pd.DataFrame([data_dict])
+        
+        # Use existing feature engineering function
+        from app.ml.preprocessing.feature_engineering.prepare_merged_data import prepare_kyc_features
+        features = prepare_kyc_features(df)
+        return features
 
     def extract_transaction_features(self, data: TransactionData) -> np.ndarray:
-        """Extract features from transaction data"""
-        transaction_type_map = {
-            "purchase": 0,
-            "withdrawal": 1,
-            "transfer": 2,
-            "deposit": 3,
-        }
-
-        return np.array(
-            [
-                [
-                    data.amount,
-                    transaction_type_map[data.transaction_type],
-                    data.hour_of_day,
-                    data.day_of_week,
-                    data.distance_from_home,
-                    int(data.is_online),
-                    data.num_transactions_last_24h,
-                    data.avg_amount_last_30d,
-                ]
-            ]
-        )
+        """Extract transaction features using feature engineering pipeline"""
+        # Convert Pydantic model to DataFrame
+        data_dict = data.model_dump()
+        df = pd.DataFrame([data_dict])
+        
+        # Use existing feature engineering function
+        from app.ml.preprocessing.feature_engineering.prepare_transaction import prepare_transaction_features
+        features = prepare_transaction_features(df)
+        return features
 
     def predict_kyc(
         self, data: KYCData
@@ -346,13 +329,8 @@ class UnsupervisedAnomalyDetectorService:
         scaled_features = self.transaction_scaler.transform(features)
 
         prediction = self.transaction_model.predict(scaled_features)[0]
-        raw_score = np.array(self.transaction_model.score_samples(scaled_features)).reshape(-1,1)
-
-        inverse_score = 1 - raw_score
-
-        # normalize the score to be between 0 and 1 where 1 is the most anomalous
-        score = (raw_score - raw_score.min()) / (raw_score.max() - raw_score.min())
-
+        # Use raw Isolation Forest score (negative values are anomalous)
+        score = self.transaction_model.score_samples(scaled_features)[0]
 
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
@@ -409,10 +387,10 @@ class UnsupervisedAnomalyDetectorService:
         return is_anomaly, float(score), risk_level, explanation
 
     def _calculate_risk_level(self, score: float) -> RiskLevel:
-        """Calculate risk level based on anomaly score"""
-        if score < settings.HIGH_RISK_THRESHOLD:
+        """Calculate risk level based on Isolation Forest score (negative = anomalous)"""
+        if score < settings.UNSUPERVISED_HIGH_RISK_THRESHOLD:
             return RiskLevel.HIGH
-        elif score < settings.MEDIUM_RISK_THRESHOLD:
+        elif score < settings.UNSUPERVISED_MEDIUM_RISK_THRESHOLD:
             return RiskLevel.MEDIUM
         else:
             return RiskLevel.LOW
