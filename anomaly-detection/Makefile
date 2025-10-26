@@ -77,7 +77,7 @@ clean:
 
 generate-data:
 	@echo "Generating synthetic training data..."
-	python scripts/generate_synthetic_data.py --kyc-samples 8999 --transaction-samples 8999 --anomaly-fraction 0.1
+	python scripts/generate_synthetic_data.py --samples 8999 --anomaly-fraction 0.1
 
 generate-data-large:
 	@echo "Generating large synthetic dataset..."

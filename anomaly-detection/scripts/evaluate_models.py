@@ -1,626 +1,474 @@
-"""
-Model Evaluation Script
-Comprehensive evaluation of trained anomaly detection models
-"""
-import sys
-import os
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
-import seaborn as sns  # noqa: E402
-from sklearn.metrics import (  # noqa: E402
-    confusion_matrix,
-    classification_report,
-    roc_curve,
-    auc,
-    precision_recall_curve,
-    average_precision_score
-)
-import joblib  # noqa: E402
-import argparse  # noqa: E402
-from pathlib import Path  # noqa: E402
-import json  # noqa: E402
-from datetime import datetime  # noqa: E402
-
-from app.core.config import settings  # noqa: E402
-
-
-class ModelEvaluator:
-    """Evaluate anomaly detection models"""
-
-    def __init__(self, model_type: str):
-        """
-        Initialize evaluator
-
-        Args:
-            model_type: 'kyc', 'business', 'transaction', 'combined', or 'customer'
-        """
-        self.model_type = model_type
-        self.model = None
-        self.scaler = None
-        self.results = {}
-
-        # Load models
-        self._load_models()
-
-    def _load_models(self):
-        """Load trained models"""
-        models_dir = Path(settings.KYC_MODEL_PATH).parent
-
-        if self.model_type == 'kyc':
-            model_path = settings.KYC_MODEL_PATH
-            scaler_path = settings.KYC_SCALER_PATH
-        elif self.model_type == 'business':
-            model_path = str(models_dir / 'business_model.pkl')
-            scaler_path = str(models_dir / 'business_scaler.pkl')
-        elif self.model_type == 'combined':
-            model_path = str(models_dir / 'merged_model.pkl')
-            scaler_path = str(models_dir / 'merged_scaler.pkl')
-        elif self.model_type == 'customer':
-            model_path = str(models_dir / 'customer_model.pkl')
-            scaler_path = str(models_dir / 'customer_scaler.pkl')
-        else:  # transaction
-            model_path = settings.TRANSACTION_MODEL_PATH
-            scaler_path = settings.TRANSACTION_SCALER_PATH
-
-        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
-            raise FileNotFoundError(f"Model files not found for {self.model_type}. Please train the model first.")
-
-        print(f"Loading {self.model_type} model from: {model_path}")
-        self.model = joblib.load(model_path)
-        self.scaler = joblib.load(scaler_path)
-        print("Models loaded successfully!")
-
-    def evaluate(self, X: np.ndarray, y_true: np.ndarray = None):
-        """
-        Evaluate model performance
-
-        Args:
-            X: Feature matrix
-            y_true: True labels (1 for normal, -1 for anomaly), optional
-        """
-        print(f"\n{'='*60}")
-        print(f"EVALUATING {self.model_type.upper()} MODEL")
-        print(f"{'='*60}")
-
-        # Scale features
-        X_scaled = self.scaler.transform(X)
-
-        # Get predictions and scores
-        y_pred = self.model.predict(X_scaled)
-        scores = self.model.score_samples(X_scaled)
-
-        # Basic statistics
-        self._compute_basic_stats(y_pred, scores)
-
-        # If true labels provided, compute detailed metrics
-        if y_true is not None:
-            self._compute_classification_metrics(y_true, y_pred, scores)
-            self._plot_confusion_matrix(y_true, y_pred)
-            self._plot_roc_curve(y_true, scores)
-            self._plot_precision_recall_curve(y_true, scores)
-
-        # Distribution analysis
-        self._plot_score_distribution(scores, y_pred, y_true)
-        self._analyze_score_thresholds(scores, y_pred)
-
-        return self.results
-
-    def _compute_basic_stats(self, y_pred: np.ndarray, scores: np.ndarray):
-        """Compute basic statistics"""
-        print("\n--- Basic Statistics ---")
-
-        total = len(y_pred)
-        n_anomalies = np.sum(y_pred == -1)
-        n_normal = np.sum(y_pred == 1)
-
-        stats = {
-            'total_samples': total,
-            'predicted_normal': n_normal,
-            'predicted_anomalies': n_anomalies,
-            'anomaly_rate': (n_anomalies / total) * 100,
-            'score_mean': scores.mean(),
-            'score_std': scores.std(),
-            'score_min': scores.min(),
-            'score_max': scores.max(),
-            'score_median': np.median(scores),
-            'score_25th_percentile': np.percentile(scores, 25),
-            'score_75th_percentile': np.percentile(scores, 75)
-        }
-
-        print(f"Total Samples: {total}")
-        print(f"Predicted Normal: {n_normal} ({(n_normal/total)*100:.2f}%)")
-        print(f"Predicted Anomalies: {n_anomalies} ({(n_anomalies/total)*100:.2f}%)")
-        print("\nAnomaly Score Statistics:")
-        print(f"  Mean: {stats['score_mean']:.4f}")
-        print(f"  Std Dev: {stats['score_std']:.4f}")
-        print(f"  Min: {stats['score_min']:.4f}")
-        print(f"  Max: {stats['score_max']:.4f}")
-        print(f"  Median: {stats['score_median']:.4f}")
-        print(f"  25th Percentile: {stats['score_25th_percentile']:.4f}")
-        print(f"  75th Percentile: {stats['score_75th_percentile']:.4f}")
-
-        self.results['basic_stats'] = stats
-
-    def _compute_classification_metrics(self, y_true: np.ndarray, y_pred: np.ndarray, scores: np.ndarray):
-        """Compute classification metrics"""
-        print("\n--- Classification Metrics ---")
-
-        # Confusion Matrix
-        cm = confusion_matrix(y_true, y_pred, labels=[1, -1])
-        tn, fp, fn, tp = cm.ravel()
-
-        # Calculate metrics
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
-
-        metrics = {
-            'true_positives': int(tp),
-            'true_negatives': int(tn),
-            'false_positives': int(fp),
-            'false_negatives': int(fn),
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1,
-            'specificity': specificity
-        }
-
-        print(f"True Positives (Anomalies detected): {tp}")
-        print(f"True Negatives (Normal detected): {tn}")
-        print(f"False Positives (Normal flagged as anomaly): {fp}")
-        print(f"False Negatives (Anomalies missed): {fn}")
-        print(f"\nAccuracy: {accuracy:.4f}")
-        print(f"Precision: {precision:.4f}")
-        print(f"Recall (Sensitivity): {recall:.4f}")
-        print(f"F1 Score: {f1:.4f}")
-        print(f"Specificity: {specificity:.4f}")
-
-        # Detailed classification report
-        print("\n--- Detailed Classification Report ---")
-        target_names = ['Normal', 'Anomaly']
-        report = classification_report(y_true, y_pred, labels=[1, -1], target_names=target_names)
-        print(report)
-
-        self.results['classification_metrics'] = metrics
-        self.results['classification_report'] = report
-
-    def _plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray):
-        """Plot confusion matrix"""
-        cm = confusion_matrix(y_true, y_pred, labels=[1, -1])
-
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                    xticklabels=['Normal', 'Anomaly'],
-                    yticklabels=['Normal', 'Anomaly'])
-        plt.title(f'Confusion Matrix - {self.model_type.upper()} Model')
-        plt.ylabel('True Label')
-        plt.xlabel('Predicted Label')
-
-        output_path = f'outputs/{self.model_type}_confusion_matrix.png'
-        os.makedirs('outputs', exist_ok=True)
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"\nConfusion matrix saved to: {output_path}")
-        plt.close()
-
-    def _plot_roc_curve(self, y_true: np.ndarray, scores: np.ndarray):
-        """Plot ROC curve"""
-        # Convert predictions to binary (1 for anomaly, 0 for normal)
-        y_true_binary = (y_true == -1).astype(int)
-
-        # Scores are negative for anomalies, so we negate them
-        fpr, tpr, thresholds = roc_curve(y_true_binary, -scores)
-        roc_auc = auc(fpr, tpr)
-
-        plt.figure(figsize=(10, 8))
-        plt.plot(fpr, tpr, color='darkorange', lw=2,
-                label=f'ROC curve (AUC = {roc_auc:.4f})')
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title(f'ROC Curve - {self.model_type.upper()} Model')
-        plt.legend(loc="lower right")
-        plt.grid(alpha=0.3)
-
-        output_path = f'outputs/{self.model_type}_roc_curve.png'
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"ROC curve saved to: {output_path}")
-        plt.close()
-
-        self.results['roc_auc'] = roc_auc
-
-    def _plot_precision_recall_curve(self, y_true: np.ndarray, scores: np.ndarray):
-        """Plot Precision-Recall curve"""
-        y_true_binary = (y_true == -1).astype(int)
-
-        precision, recall, thresholds = precision_recall_curve(y_true_binary, -scores)
-        avg_precision = average_precision_score(y_true_binary, -scores)
-
-        plt.figure(figsize=(10, 8))
-        plt.plot(recall, precision, color='blue', lw=2,
-                label=f'PR curve (AP = {avg_precision:.4f})')
-        plt.xlabel('Recall')
-        plt.ylabel('Precision')
-        plt.title(f'Precision-Recall Curve - {self.model_type.upper()} Model')
-        plt.legend(loc="lower left")
-        plt.grid(alpha=0.3)
-
-        output_path = f'outputs/{self.model_type}_precision_recall_curve.png'
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Precision-Recall curve saved to: {output_path}")
-        plt.close()
-
-        self.results['average_precision'] = avg_precision
-
-    def _plot_score_distribution(self, scores: np.ndarray, y_pred: np.ndarray, y_true: np.ndarray = None):
-        """Plot anomaly score distribution"""
-        plt.figure(figsize=(12, 6))
-
-        if y_true is not None:
-            # Plot by true labels
-            normal_scores = scores[y_true == 1]
-            anomaly_scores = scores[y_true == -1]
-
-            plt.hist(normal_scores, bins=50, alpha=0.5, label='True Normal', color='green')
-            plt.hist(anomaly_scores, bins=50, alpha=0.5, label='True Anomaly', color='red')
-        else:
-            # Plot by predicted labels
-            normal_scores = scores[y_pred == 1]
-            anomaly_scores = scores[y_pred == -1]
-
-            plt.hist(normal_scores, bins=50, alpha=0.5, label='Predicted Normal', color='blue')
-            plt.hist(anomaly_scores, bins=50, alpha=0.5, label='Predicted Anomaly', color='orange')
-
-        plt.xlabel('Anomaly Score')
-        plt.ylabel('Frequency')
-        plt.title(f'Anomaly Score Distribution - {self.model_type.upper()} Model')
-        plt.legend()
-        plt.grid(alpha=0.3)
-
-        # Add threshold lines
-        plt.axvline(settings.HIGH_RISK_THRESHOLD, color='red', linestyle='--',
-                   label=f'High Risk ({settings.HIGH_RISK_THRESHOLD})')
-        plt.axvline(settings.MEDIUM_RISK_THRESHOLD, color='orange', linestyle='--',
-                   label=f'Medium Risk ({settings.MEDIUM_RISK_THRESHOLD})')
-        plt.legend()
-
-        output_path = f'outputs/{self.model_type}_score_distribution.png'
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Score distribution saved to: {output_path}")
-        plt.close()
-
-    def _analyze_score_thresholds(self, scores: np.ndarray, y_pred: np.ndarray):
-        """Analyze different threshold levels"""
-        print("\n--- Threshold Analysis ---")
-
-        high_risk = np.sum(scores < settings.HIGH_RISK_THRESHOLD)
-        medium_risk = np.sum((scores >= settings.HIGH_RISK_THRESHOLD) &
-                            (scores < settings.MEDIUM_RISK_THRESHOLD))
-        low_risk = np.sum(scores >= settings.MEDIUM_RISK_THRESHOLD)
-
-        total = len(scores)
-
-        threshold_stats = {
-            'high_risk_count': int(high_risk),
-            'medium_risk_count': int(medium_risk),
-            'low_risk_count': int(low_risk),
-            'high_risk_percentage': (high_risk / total) * 100,
-            'medium_risk_percentage': (medium_risk / total) * 100,
-            'low_risk_percentage': (low_risk / total) * 100
-        }
-
-        print(f"High Risk (score < {settings.HIGH_RISK_THRESHOLD}): {high_risk} ({threshold_stats['high_risk_percentage']:.2f}%)")
-        print(f"Medium Risk ({settings.HIGH_RISK_THRESHOLD} ≤ score < {settings.MEDIUM_RISK_THRESHOLD}): {medium_risk} ({threshold_stats['medium_risk_percentage']:.2f}%)")
-        print(f"Low Risk (score ≥ {settings.MEDIUM_RISK_THRESHOLD}): {low_risk} ({threshold_stats['low_risk_percentage']:.2f}%)")
-
-        self.results['threshold_analysis'] = threshold_stats
-
-    def save_results(self, output_dir: str = 'outputs'):
-        """Save evaluation results to JSON"""
-        os.makedirs(output_dir, exist_ok=True)
-
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = os.path.join(output_dir, f'{self.model_type}_evaluation_{timestamp}.json')
-
-        # Convert numpy types to native Python types
-        results_json = json.loads(json.dumps(self.results, default=str))
-
-        with open(output_path, 'w') as f:
-            json.dump(results_json, f, indent=2)
-
-        print(f"\nEvaluation results saved to: {output_path}")
-
-
-def prepare_kyc_features(df: pd.DataFrame) -> np.ndarray:
-    """Extract KYC features - matches training script exactly"""
-    features = []
-
-    features.append(df['customer_age'].values)
-    gender_encoded = (df['customer_gender'] == 'female').astype(int)
-    features.append(gender_encoded.values)
-
-    marital_mapping = {'single': 0, 'married': 1, 'divorced': 2, 'widowed': 3}
-    marital_encoded = df['customer_marital_status'].map(marital_mapping).fillna(-1)
-    features.append(marital_encoded.values)
-
-    education_mapping = {'primary': 0, 'secondary': 1, 'tertiary': 2, 'post_graduate': 3}
-    education_encoded = df['customer_education_level'].map(education_mapping).fillna(-1)
-    features.append(education_encoded.values)
-
-    region_encoded = pd.Categorical(df['customer_region']).codes
-    features.append(region_encoded)
-
-    city_encoded = pd.Categorical(df['customer_city']).codes
-    features.append(city_encoded)
-
-    zone_encoded = pd.Categorical(df['customer_zone_or_sub_city']).codes
-    features.append(zone_encoded)
-
-    woreda_numeric = pd.to_numeric(df['customer_woreda'], errors='coerce').fillna(0)
-    features.append(woreda_numeric.values)
-
-    phone_last_4 = df['customer_phone_number'].astype(str).str[-4:].astype(int)
-    features.append(phone_last_4.values)
-
-    tin_length = df['customer_tin_number'].str.len()
-    features.append(tin_length.values)
-
-    account_length = df['customer_bank_account_number'].str.len()
-    features.append(account_length.values)
-
-    return np.column_stack(features)
-
-
-def prepare_business_features(df: pd.DataFrame) -> np.ndarray:
-    """Extract business features - matches training script exactly"""
-    features = []
-
-    features.append(df['business_establishment_year'].values)
-
-    sector_mapping = {
-        'AGRICULTURE': 0, 'MANUFACTURING': 1, 'DOMESTIC_TRADE_SERVICES': 2,
-        'SERVICES': 3, 'OTHER': 4
+import json
+import numpy as np
+import pandas as pd
+import joblib
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+from pathlib import Path
+
+# Model paths
+MODEL_CONFIG = {
+    "kyc": {
+        "model_path": "data/models/kyc_model.pkl",
+        "scaler_path": "data/models/kyc_scaler.pkl",
+        "data_path": "data/evaluation/kyc_evaluation_data.csv",
+        "id_col": "customerId"
+    },
+    "business": {
+        "model_path": "data/models/business_model.pkl",
+        "scaler_path": "data/models/business_scaler.pkl",
+        "data_path": "data/evaluation/business_evaluation_data.csv",
+        "id_col": "customerId"
+    },
+    "transaction": {
+        "model_path": "data/models/transaction_model.pkl",
+        "scaler_path": "data/models/transaction_scaler.pkl",
+        "data_path": "data/evaluation/transaction_evaluation_data.csv",
+        "id_col": "customer_id"
+    },
+    "merged": {
+        "model_path": "data/models/merged_model.pkl",
+        "scaler_path": "data/models/merged_scaler.pkl",
+        "data_path": "data/evaluation/kyc_business_evaluation_data.csv",
+        "id_col": "customerId"
+    },
+    "customer": {
+        "model_path": "data/models/customer_model.pkl",
+        "scaler_path": "data/models/customer_scaler.pkl",
+        "data_path": "data/evaluation/transaction_evaluation_data.csv",
+        "id_col": None  # Will use customer_id from aggregation
     }
-    sector_encoded = df['business_sector'].map(sector_mapping).fillna(-1)
-    features.append(sector_encoded.values)
+}
 
-    level_mapping = {'GROWING': 0, 'STARTUP': 1}
-    level_encoded = df['business_level'].map(level_mapping).fillna(-1)
-    features.append(level_encoded.values)
+OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR.mkdir(exist_ok=True)
 
-    features.append(df['business_starting_capital'].values)
-    features.append(df['business_current_capital'].values)
-    features.append(df['business_annual_profit'].values)
-    features.append(df['business_annual_sales'].values)
-    features.append(df['business_starting_no_of_employees'].values)
-    features.append(df['business_current_no_of_employees'].values)
-
-    source_mapping = {'FAMILY': 0, 'OWN': 1, 'LOAN': 2, 'FUND': 3, 'OTHER': 4}
-    source_encoded = df['business_source_of_initial_capital'].map(source_mapping).fillna(-1)
-    features.append(source_encoded.values)
-
-    association_mapping = {
-        'SOLE_PROPRIETORSHIP': 0, 'PARTNERSHIP': 1, 'CORPORATION': 2, 'OTHER': 3
-    }
-    association_encoded = df['business_association_type'].map(association_mapping).fillna(-1)
-    features.append(association_encoded.values)
-
-    capital_growth = np.where(df['business_starting_capital'] > 0,
-                             df['business_current_capital'] / df['business_starting_capital'], 0)
-    features.append(capital_growth)
-
-    employee_growth = np.where(df['business_starting_no_of_employees'] > 0,
-                              df['business_current_no_of_employees'] / df['business_starting_no_of_employees'], 0)
-    features.append(employee_growth)
-
-    profit_margin = np.where(df['business_annual_sales'] > 0,
-                            df['business_annual_profit'] / df['business_annual_sales'], 0)
-    features.append(profit_margin)
-
-    current_year = 2024
-    business_age = current_year - df['business_establishment_year']
-    features.append(business_age.values)
-
-    return np.column_stack(features)
+# CONTAMINATION used during training (must match!)
+CONTAMINATION = 0.02
 
 
 def prepare_transaction_features(df: pd.DataFrame) -> np.ndarray:
-    """Extract transaction features"""
-    type_mapping = {'purchase': 0, 'withdrawal': 1, 'transfer': 2, 'deposit': 3}
-    df['transaction_type_encoded'] = df['transaction_type'].map(type_mapping)
-
-    features = df[[
-        'amount', 'transaction_type_encoded', 'hour_of_day', 'day_of_week',
-        'distance_from_home', 'is_online', 'num_transactions_last_24h',
-        'avg_amount_last_30d'
-    ]].values
-    return features
-
-
-def prepare_customer_features(df: pd.DataFrame) -> np.ndarray:
-    """Extract customer features (KYC + Business combined)"""
-    kyc_features = prepare_kyc_features(df)
-    business_features = prepare_business_features(df)
-    return np.column_stack([kyc_features, business_features])
-
-
-def prepare_combined_features(df: pd.DataFrame) -> np.ndarray:
-    """Extract combined features (KYC + Business + Transaction)"""
-    kyc_features = prepare_kyc_features(df)
-    business_features = prepare_business_features(df)
-    transaction_features = prepare_transaction_features(df)
-    return np.column_stack([kyc_features, business_features, transaction_features])
-
-
-def generate_synthetic_kyc_data(n_samples: int = 5000) -> np.ndarray:
-    """Generate synthetic KYC data matching training format"""
-    # Generate realistic synthetic KYC data
-    data = {
-        'customer_age': np.random.randint(18, 80, n_samples),
-        'customer_gender': np.random.choice(['male', 'female'], n_samples),
-        'customer_marital_status': np.random.choice(['single', 'married', 'divorced', 'widowed'], n_samples),
-        'customer_education_level': np.random.choice(['primary', 'secondary', 'tertiary', 'post_graduate'], n_samples),
-        'customer_region': np.random.choice(['Addis Ababa', 'Oromia', 'Amhara', 'Tigray', 'SNNPR'], n_samples),
-        'customer_city': np.random.choice(['Addis Ababa', 'Dire Dawa', 'Mekelle', 'Bahir Dar', 'Awasa'], n_samples),
-        'customer_zone_or_sub_city': np.random.choice(['Zone1', 'Zone2', 'Zone3', 'Zone4'], n_samples),
-        'customer_woreda': np.random.randint(1, 20, n_samples).astype(str),
-        'customer_phone_number': ['09' + str(np.random.randint(10000000, 99999999)) for _ in range(n_samples)],
-        'customer_tin_number': ['TIN' + str(np.random.randint(1000000, 9999999)) for _ in range(n_samples)],
-        'customer_bank_account_number': ['ACC' + str(np.random.randint(100000000, 999999999)) for _ in range(n_samples)],
+    """Enhanced transaction features with velocity and pattern detection"""
+    features = []
+    df = df.copy()
+    
+    # Basic amounts
+    credit = df["credit"].values
+    debit = df["debit"].values
+    balance = df["closingBalance"].values
+    
+    features.extend([credit, debit, balance])
+    features.extend([np.log1p(credit), np.log1p(debit), np.log1p(balance)])
+    
+    # Source encoding
+    source_mapping = {
+        "cash deposit": 0, 
+        "fund transfer": 1, 
+        "cash withdraw": 2,
+        "tele birr incoming": 3, 
+        "tele birr out going": 4, 
+        "atm card subscription fee": 5
     }
-    df = pd.DataFrame(data)
-    return prepare_kyc_features(df)
+    source_encoded = df["source"].str.lower().map(source_mapping).fillna(-1).values
+    features.append(source_encoded)
+    
+    # Narrative analysis
+    narrative_length = df["narrative"].fillna("").str.len().values
+    features.append(narrative_length)
+    
+    # Transaction amount (net) - already numpy arrays
+    transaction_amount = credit - debit
+    features.append(transaction_amount)
+    features.append(np.abs(transaction_amount))
+    
+    # Balance ratio
+    balance_ratio = np.where(balance > 0, transaction_amount / balance, 0)
+    features.append(np.clip(balance_ratio, -10, 10))
+    
+    # Date features
+    df["date"] = pd.to_datetime(df["date"])
+    hour = df["date"].dt.hour.values
+    dayofweek = df["date"].dt.dayofweek.values
+    day = df["date"].dt.day.values
+    month = df["date"].dt.month.values
+    
+    features.extend([hour, dayofweek, day, month])
+    
+    # NEW: Time-based anomaly indicators
+    is_night = ((hour >= 22) | (hour <= 6)).astype(int)
+    is_weekend = (dayofweek >= 5).astype(int)
+    features.extend([is_night, is_weekend])
+    
+    # Customer transaction frequency
+    customer_txn_counts = df.groupby("customer_id").size()
+    txn_freq = df["customer_id"].map(customer_txn_counts).values
+    features.append(txn_freq)
+    
+    # NEW: Round amount detection (fraud indicator)
+    is_round = ((credit % 1000 == 0) | (debit % 1000 == 0)).astype(int)
+    features.append(is_round)
+    
+    # NEW: Customer-level velocity (within-day transactions)
+    df["date_only"] = df["date"].dt.date
+    daily_txn_count = df.groupby(["customer_id", "date_only"]).size()
+    df["daily_velocity"] = df.set_index(["customer_id", "date_only"]).index.map(daily_txn_count.to_dict())
+    daily_velocity = df["daily_velocity"].fillna(1).values
+    features.append(daily_velocity)
+    
+    return np.column_stack(features)
 
 
-def generate_synthetic_business_data(n_samples: int = 5000) -> np.ndarray:
-    """Generate synthetic business data matching training format"""
-    current_year = 2024
-    data = {
-        'business_establishment_year': np.random.randint(1990, 2024, n_samples),
-        'business_sector': np.random.choice(['AGRICULTURE', 'MANUFACTURING', 'DOMESTIC_TRADE_SERVICES', 'SERVICES', 'OTHER'], n_samples),
-        'business_level': np.random.choice(['GROWING', 'STARTUP'], n_samples),
-        'business_starting_capital': np.random.uniform(10000, 500000, n_samples),
-        'business_current_capital': np.random.uniform(10000, 1000000, n_samples),
-        'business_annual_profit': np.random.uniform(-50000, 300000, n_samples),
-        'business_annual_sales': np.random.uniform(50000, 1000000, n_samples),
-        'business_starting_no_of_employees': np.random.randint(1, 20, n_samples),
-        'business_current_no_of_employees': np.random.randint(1, 50, n_samples),
-        'business_source_of_initial_capital': np.random.choice(['FAMILY', 'OWN', 'LOAN', 'FUND', 'OTHER'], n_samples),
-        'business_association_type': np.random.choice(['SOLE_PROPRIETORSHIP', 'PARTNERSHIP', 'CORPORATION', 'OTHER'], n_samples),
+def prepare_customer_features(df: pd.DataFrame) -> tuple[np.ndarray, list]:
+    """Prepare customer-level features with advanced behavior patterns"""
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    
+    customer_ids = []
+    customer_features = []
+    
+    for customer_id, group in df.groupby("customer_id"):
+        customer_ids.append(customer_id)
+        n_txns = len(group)
+        features = []
+        
+        # Basic volume metrics
+        features.append(n_txns)
+        features.append(np.log1p(n_txns))
+        
+        # Amount statistics
+        credit_sum = group["credit"].sum()
+        debit_sum = group["debit"].sum()
+        features.extend([
+            credit_sum, debit_sum,
+            group["credit"].mean(), group["debit"].mean(),
+            group["credit"].max(), group["debit"].max(),
+            group["credit"].std() if n_txns > 1 else 0.0,
+            group["debit"].std() if n_txns > 1 else 0.0
+        ])
+        
+        # NEW: Credit/Debit ratio
+        cd_ratio = credit_sum / (debit_sum + 1)
+        features.append(np.log1p(cd_ratio))
+        
+        # Balance statistics
+        balance = group["closingBalance"]
+        features.extend([
+            balance.mean(), balance.max(), balance.min(),
+            balance.std() if n_txns > 1 else 0.0
+        ])
+        
+        # Transaction amount stats
+        txn_amt = group["credit"] - group["debit"]
+        features.extend([
+            txn_amt.mean(), txn_amt.max(), txn_amt.min(),
+            txn_amt.std() if n_txns > 1 else 0.0,
+            txn_amt.median()
+        ])
+        
+        # Source diversity
+        total = max(n_txns, 1)
+        source_counts = group["source"].value_counts()
+        features.extend([
+            len(source_counts),  # Diversity
+            source_counts.iloc[0] / total if len(source_counts) > 0 else 0.0,  # Dominance
+            (group["source"].str.contains("CASH DEPOSIT", case=False, na=False)).sum() / total,
+            (group["source"].str.contains("FUND TRANSFER", case=False, na=False)).sum() / total,
+            (group["source"].str.contains("CASH WITHDRAW", case=False, na=False)).sum() / total,
+            (group["source"].str.contains("TELE BIRR", case=False, na=False)).sum() / total
+        ])
+        
+        # Temporal patterns
+        hours = group["date"].dt.hour
+        features.extend([
+            hours.mean(),
+            hours.std() if n_txns > 1 else 0.0,
+            ((hours >= 22) | (hours <= 6)).sum() / total,  # Night transactions
+            ((hours >= 9) & (hours <= 17)).sum() / total   # Business hours
+        ])
+        
+        dow = group["date"].dt.dayofweek
+        features.extend([
+            (dow < 5).sum() / total,    # Weekday ratio
+            (dow >= 5).sum() / total    # Weekend ratio
+        ])
+        
+        # Time between transactions (velocity)
+        if n_txns > 1:
+            sorted_dates = group["date"].sort_values()
+            diffs_hours = sorted_dates.diff().dt.total_seconds().fillna(0) / 3600
+            features.extend([
+                diffs_hours.mean(),
+                diffs_hours.median(),
+                diffs_hours.min(),
+                diffs_hours.max(),
+                diffs_hours.std()
+            ])
+            
+            # NEW: Burst detection (many transactions in short time)
+            rapid_txns = (diffs_hours < 1).sum()
+            features.append(rapid_txns / max(n_txns - 1, 1))
+        else:
+            features.extend([0.0] * 6)
+        
+        # Narrative patterns
+        narratives = group["narrative"].fillna("")
+        features.extend([
+            narratives.str.len().mean(),
+            narratives.nunique(),
+            narratives.nunique() / total,  # Diversity
+            (narratives.str.len() < 5).sum() / total  # Short narratives
+        ])
+        
+        # Balance behavior
+        balance_ratio = np.where(balance > 0, txn_amt / balance, 0)
+        features.extend([
+            np.mean(balance_ratio),
+            np.max(balance_ratio),
+            np.std(balance_ratio) if n_txns > 1 else 0.0
+        ])
+        
+        # Risk indicators
+        high_amt_thresh = txn_amt.quantile(0.9) if n_txns > 0 else 0
+        high_amt_ratio = (np.abs(txn_amt) > high_amt_thresh).sum() / total
+        features.append(high_amt_ratio)
+        
+        # NEW: Round amount ratio (fraud indicator)
+        round_amt_ratio = ((group["credit"] % 1000 == 0) | (group["debit"] % 1000 == 0)).sum() / total
+        features.append(round_amt_ratio)
+        
+        # NEW: Account lifetime (days active)
+        account_lifetime = (group["date"].max() - group["date"].min()).days
+        features.append(account_lifetime)
+        
+        # NEW: Activity intensity (txns per day active)
+        activity_intensity = n_txns / max(account_lifetime, 1)
+        features.append(activity_intensity)
+        
+        # Ensure all features are float
+        features = [float(x) if pd.notna(x) else 0.0 for x in features]
+        customer_features.append(features)
+    
+    X = np.array(customer_features, dtype=np.float32)
+    print(f"Generated {X.shape[1]} features for {len(customer_ids)} customers")
+    return X, customer_ids
+
+
+
+
+# ======================
+# EVALUATION FUNCTIONS
+# ======================
+
+def plot_precision_recall_curve(y_true, anomaly_scores, model_name):
+    from sklearn.metrics import precision_recall_curve, average_precision_score
+    precision, recall, thresholds = precision_recall_curve(y_true, anomaly_scores)
+    pr_auc = average_precision_score(y_true, anomaly_scores)
+    
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall, precision, marker='.', label=f'PR AUC = {pr_auc:.3f}')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title(f'{model_name.title()} Precision-Recall Curve')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(OUTPUT_DIR / f"{model_name}_precision_recall_curve.png", bbox_inches='tight')
+    plt.close()
+    return pr_auc
+
+def evaluate_with_labels(anomaly_scores, y_true, model_name):
+    """Compute supervised metrics using hidden labels"""
+    from sklearn.metrics import f1_score, classification_report, confusion_matrix
+    
+    # Threshold at expected contamination rate
+    threshold = np.percentile(anomaly_scores, (1 - CONTAMINATION) * 100)
+    y_pred = (anomaly_scores >= threshold).astype(int)
+    
+    # Metrics
+    f1 = f1_score(y_true, y_pred)
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    
+    # Recall @ 90% Precision
+    from sklearn.metrics import precision_recall_curve
+    precisions, recalls, thresholds = precision_recall_curve(y_true, anomaly_scores)
+    target_idx = np.where(precisions[:-1] >= 0.9)[0]
+    recall_at_90_prec = recalls[target_idx[-1]] if len(target_idx) > 0 else 0.0
+    
+    print(f"\n--- SUPERVISED METRICS (validation only) ---")
+    print(f"F1-Score (@{CONTAMINATION:.1%} threshold): {f1:.4f}")
+    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}")
+    print(f"Recall @ 90% Precision: {recall_at_90_prec:.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, target_names=["Normal", "Anomaly"]))
+    
+    # Plot PR curve
+    pr_auc = plot_precision_recall_curve(y_true, anomaly_scores, model_name)
+    
+    return {
+        "f1_score": float(f1),
+        "precision": float(precision),
+        "recall": float(recall),
+        "pr_auc": float(pr_auc),
+        "recall_at_90_precision": float(recall_at_90_prec),
+        "threshold_used": float(threshold),
+        "confusion_matrix": [int(tn), int(fp), int(fn), int(tp)]
     }
-    df = pd.DataFrame(data)
-    return prepare_business_features(df)
 
-
-def generate_synthetic_transaction_data(n_samples: int = 5000) -> np.ndarray:
-    """Generate synthetic transaction data matching training format"""
-    data = {
-        'amount': np.random.uniform(10, 10000, n_samples),
-        'transaction_type': np.random.choice(['purchase', 'withdrawal', 'transfer', 'deposit'], n_samples),
-        'hour_of_day': np.random.randint(0, 24, n_samples),
-        'day_of_week': np.random.randint(0, 7, n_samples),
-        'distance_from_home': np.random.uniform(0, 100, n_samples),
-        'is_online': np.random.choice([0, 1], n_samples),
-        'num_transactions_last_24h': np.random.randint(0, 20, n_samples),
-        'avg_amount_last_30d': np.random.uniform(50, 5000, n_samples),
+def evaluate_model(model_name, prepare_func, is_customer=False):
+    config = MODEL_CONFIG[model_name]
+    print(f"\n{'='*60}")
+    print(f"EVALUATING {model_name.upper()} MODEL")
+    print(f"{'='*60}")
+    
+    # Load data
+    df = pd.read_csv(config["data_path"])
+    print(f"Loaded {len(df):,} records from {config['data_path']}")
+    
+    # Load model and scaler
+    model = joblib.load(config["model_path"])
+    scaler = joblib.load(config["scaler_path"])
+    
+    # ✅ FIX: Handle customer-level aggregation BEFORE feature preparation
+    if is_customer:
+        # Prepare customer-level features
+        X, ids = prepare_func(df)
+        
+        # ✅ CRITICAL FIX: Aggregate labels at customer level
+        if "is_anomaly" in df.columns:
+            # Customer is anomalous if ANY of their transactions are anomalous
+            customer_labels = df.groupby("customer_id")["is_anomaly"].max()
+            # Align with customer IDs from feature extraction
+            y_true = customer_labels.loc[ids].values
+            has_labels = True
+            print(f"⚠️  Aggregated {len(df)} transaction labels to {len(y_true)} customer labels")
+            print(f"    Anomalous customers: {y_true.sum()} ({y_true.sum()/len(y_true)*100:.1f}%)")
+        else:
+            y_true = None
+            has_labels = False
+            print("ℹ️  No labels found — unsupervised evaluation only")
+    else:
+        # Non-customer models: standard flow
+        X = prepare_func(df)
+        ids = df[config["id_col"]] if config["id_col"] else df.index
+        has_labels = "is_anomaly" in df.columns
+        if has_labels:
+            y_true = df["is_anomaly"].values
+            print(f"⚠️  Found 'is_anomaly' column — computing supervised metrics")
+        else:
+            y_true = None
+            print("ℹ️  No labels found — unsupervised evaluation only")
+    
+    # Predict
+    X_scaled = scaler.transform(X)
+    scores = model.score_samples(X_scaled)
+    anomaly_scores = -scores  # Higher = more anomalous
+    
+    # Basic stats
+    total = len(anomaly_scores)
+    results = {
+        "model_name": model_name,
+        "total_samples": total,
+        "anomaly_score_stats": {
+            "mean": float(anomaly_scores.mean()),
+            "std": float(anomaly_scores.std()),
+            "min": float(anomaly_scores.min()),
+            "max": float(anomaly_scores.max()),
+            "median": float(np.median(anomaly_scores))
+        },
+        "has_labels": has_labels,
+        "evaluation_timestamp": datetime.now().isoformat()
     }
-    df = pd.DataFrame(data)
-    return prepare_transaction_features(df)
-
-
-def generate_synthetic_customer_data(n_samples: int = 5000) -> np.ndarray:
-    """Generate synthetic customer data (KYC + Business)"""
-    kyc_features = generate_synthetic_kyc_data(n_samples)
-    business_features = generate_synthetic_business_data(n_samples)
-    return np.column_stack([kyc_features, business_features])
-
-
-def generate_synthetic_combined_data(n_samples: int = 5000) -> np.ndarray:
-    """Generate synthetic combined data (KYC + Business + Transaction)"""
-    kyc_features = generate_synthetic_kyc_data(n_samples)
-    business_features = generate_synthetic_business_data(n_samples)
-    transaction_features = generate_synthetic_transaction_data(n_samples)
-    return np.column_stack([kyc_features, business_features, transaction_features])
-
+    
+    print(f"\n--- Basic Statistics ---")
+    print(f"Total Samples: {total:,}")
+    stats = results["anomaly_score_stats"]
+    print(f"Anomaly Score - Mean: {stats['mean']:.4f}, Std: {stats['std']:.4f}")
+    print(f"Range: [{stats['min']:.4f}, {stats['max']:.4f}]")
+    
+    # Top anomalies
+    top_n = min(100, total)
+    top_idx = np.argsort(anomaly_scores)[-top_n:][::-1]
+    top_df = pd.DataFrame({
+        'id': [ids[i] for i in top_idx],
+        'anomaly_score': anomaly_scores[top_idx]
+    })
+    top_path = OUTPUT_DIR / f"{model_name}_top_anomalies.csv"
+    top_df.to_csv(top_path, index=False)
+    results["top_anomalies_file"] = str(top_path)
+    print(f"Top {top_n} anomalies saved to: {top_path}")
+    
+    # Score distribution plot
+    plt.figure(figsize=(10, 6))
+    sns.histplot(anomaly_scores, bins=50, kde=True)
+    plt.title(f"{model_name.title()} Anomaly Score Distribution")
+    plt.xlabel("Anomaly Score (higher = more anomalous)")
+    plt.ylabel("Frequency")
+    dist_path = OUTPUT_DIR / f"{model_name}_score_distribution.png"
+    plt.savefig(dist_path, bbox_inches='tight')
+    plt.close()
+    results["score_distribution_plot"] = str(dist_path)
+    
+    # Supervised metrics (if labels exist)
+    if has_labels:
+        label_metrics = evaluate_with_labels(anomaly_scores, y_true, model_name)
+        results["supervised_metrics"] = label_metrics
+    
+    # Save full results
+    json_path = OUTPUT_DIR / f"{model_name}_evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    with open(json_path, 'w') as f:
+        json.dump(results, f, indent=2)
+    results["results_file"] = str(json_path)
+    print(f"Evaluation results saved to: {json_path}")
+    
+    return results
 
 def main():
-    parser = argparse.ArgumentParser(description='Evaluate anomaly detection models')
-    parser.add_argument('--model-type', type=str, required=True,
-                       choices=['kyc', 'business', 'transaction', 'customer', 'combined', 'all'],
-                       help='Model type to evaluate')
-    parser.add_argument('--test-data', type=str, help='Path to test data CSV')
-    parser.add_argument('--labels-col', type=str, default='is_anomaly',
-                       help='Column name for true labels')
-    parser.add_argument('--output-dir', type=str, default='outputs',
-                       help='Output directory for results')
-
-    args = parser.parse_args()
-
-    # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    print("=" * 60)
-    print("MODEL EVALUATION")
-    print("=" * 60)
-
-    # Determine which models to evaluate
-    if args.model_type == 'all':
-        models_to_evaluate = ['kyc', 'business', 'transaction', 'customer', 'combined']
-    else:
-        models_to_evaluate = [args.model_type]
-
-    for model_type in models_to_evaluate:
-        try:
-            evaluator = ModelEvaluator(model_type)
-
-            if args.test_data:
-                # Load test data
-                print(f"\nLoading test data from: {args.test_data}")
-                df = pd.read_csv(args.test_data)
-
-                # Prepare features based on model type
-                if model_type == 'kyc':
-                    X = prepare_kyc_features(df)
-                elif model_type == 'business':
-                    X = prepare_business_features(df)
-                elif model_type == 'transaction':
-                    X = prepare_transaction_features(df)
-                elif model_type == 'customer':
-                    X = prepare_customer_features(df)
-                elif model_type == 'combined':
-                    X = prepare_combined_features(df)
-
-                # Get true labels if available
-                y_true = None
-                if args.labels_col in df.columns:
-                    # Convert to Isolation Forest format (1 for normal, -1 for anomaly)
-                    y_true = df[args.labels_col].apply(lambda x: -1 if x == 1 else 1).values
-
-                # Evaluate
-                evaluator.evaluate(X, y_true)
-            else:
-                print("\nNo test data provided. Generating synthetic data for evaluation...")
-                # Generate synthetic data matching training format
-                if model_type == 'kyc':
-                    X = generate_synthetic_kyc_data(5000)
-                elif model_type == 'business':
-                    X = generate_synthetic_business_data(5000)
-                elif model_type == 'transaction':
-                    X = generate_synthetic_transaction_data(5000)
-                elif model_type == 'customer':
-                    X = generate_synthetic_customer_data(5000)
-                elif model_type == 'combined':
-                    X = generate_synthetic_combined_data(5000)
-                else:
-                    print(f"Unknown model type: {model_type}. Skipping...")
-                    continue
-
-                evaluator.evaluate(X)
-
-            # Save results
-            evaluator.save_results(args.output_dir)
-
-        except FileNotFoundError as e:
-            print(f"\n⚠ Skipping {model_type} model: {e}")
-            continue
-        except Exception as e:
-            print(f"\n❌ Error evaluating {model_type} model: {e}")
-            continue
-
-    print("\n" + "=" * 60)
+    print("Evaluating all Isolation Forest models...")
+    print("\nℹ️  Note: Only evaluating models that were actually trained:")
+    print("   - Transaction model")
+    print("   - Merged model (KYC + Business)")
+    print("   - Customer model")
+    print("   Skipping standalone KYC and Business models (not trained separately)\n")
+    
+    all_results = {}
+    
+    # Skip standalone KYC and Business models - they weren't trained
+    # The training script only trains: merged, transaction, and customer models
+    
+    try:
+        all_results["transaction"] = evaluate_model("transaction", prepare_transaction_features)
+    except Exception as e:
+        print(f"❌ Transaction model failed: {e}")
+    
+    try:
+        all_results["merged"] = evaluate_model("merged", prepare_merged_features)
+    except Exception as e:
+        print(f"❌ Merged model failed: {e}")
+    
+    try:
+        all_results["customer"] = evaluate_model("customer", prepare_customer_features, is_customer=True)
+    except Exception as e:
+        print(f"❌ Customer model failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Final summary
+    print(f"\n{'='*60}")
     print("EVALUATION COMPLETE!")
-    print("=" * 60)
-    print(f"\nResults saved to: {args.output_dir}/")
-
+    print(f"{'='*60}")
+    for name, res in all_results.items():
+        if res:
+            print(f"\n{name.upper()}:")
+            print(f"  Samples: {res['total_samples']:,}")
+            stats = res['anomaly_score_stats']
+            print(f"  Score range: [{stats['min']:.3f}, {stats['max']:.3f}]")
+            if res.get("supervised_metrics"):
+                sm = res["supervised_metrics"]
+                print(f"  F1-Score: {sm['f1_score']:.3f}")
+                print(f"  PR-AUC: {sm['pr_auc']:.3f}")
+                print(f"  Recall @ 90% Precision: {sm['recall_at_90_precision']:.3f}")
 
 if __name__ == "__main__":
     main()

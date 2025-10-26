@@ -35,3 +35,7 @@ def setup_logging():
 def get_logger(name: str):
     """Get a logger instance"""
     return logging.getLogger(f"anomaly_detection.{name}")
+
+
+setup_logging()
+logger = logging.getLogger("anomaly_detection")

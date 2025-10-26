@@ -1,49 +1,29 @@
-"""
-Enhanced Model Training with Optimized Feature Engineering
-Focus: MAIN MODELS (Merged, Transaction, Customer)
-Uses feature engineering modules from app.ml.preprocessing.feature_engineering
-"""
-
-import sys
-from pathlib import Path
-
-# Add project root to path to allow imports
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
 import numpy as np
 import pandas as pd
 import joblib
+from pathlib import Path
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler, RobustScaler
-import warnings
-warnings.filterwarnings('ignore')
 
-# Import feature engineering functions
 from app.ml.preprocessing.feature_engineering import (
     prepare_transaction_features,
     prepare_customer_features,
-    prepare_merged_features,
+    prepare_kyc_features,
+    prepare_business_features,
 )
 
 MODELS_DIR = Path("data/models")
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-
-# ======================
-# OPTIMIZED TRAINING FUNCTION
-# ======================
-
-def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=False):
+def train_unsupervised_model(X: np.ndarray, model_type: str, use_robust_scaler=False):
     """
     Train Isolation Forest with optimized parameters per model type
     """
     print(f"\nTraining OPTIMIZED {model_type} model...")
     print(f"Training samples: {X.shape[0]}, Features: {X.shape[1]}")
     
-    # Choose scaler based on model type
     if use_robust_scaler:
-        scaler = RobustScaler()  # Better for outliers
+        scaler = RobustScaler() 
         print("Using RobustScaler (better for outliers)")
     else:
         scaler = StandardScaler()
@@ -51,11 +31,9 @@ def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=Fals
     
     X_scaled = scaler.fit_transform(X)
     
-    # Model-specific hyperparameters
     if model_type == "customer":
-        # Customer: Fewer samples, need more sensitivity
         model = IsolationForest(
-            contamination=0.015,  # Lower for customer-level
+            contamination=0.015,  
             n_estimators=200,
             max_samples=min(512, X.shape[0]),
             max_features=min(15, X.shape[1]),
@@ -64,18 +42,16 @@ def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=Fals
             verbose=1
         )
     elif model_type == "transaction":
-        # Transaction: Many samples, standard params
         model = IsolationForest(
             contamination=0.02,
             n_estimators=150,
             max_samples=2048,
-            max_features=0.8,  # Use 80% of features
+            max_features=0.8, 
             random_state=42,
             n_jobs=-1,
             verbose=1
         )
     elif model_type == "merged":
-        # Merged: Balanced approach
         model = IsolationForest(
             contamination=0.02,
             n_estimators=175,
@@ -86,7 +62,6 @@ def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=Fals
             verbose=1
         )
     else:
-        # Default
         model = IsolationForest(
             contamination=0.02,
             n_estimators=100,
@@ -98,7 +73,6 @@ def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=Fals
     
     model.fit(X_scaled)
     
-    # Evaluation
     predictions = model.predict(X_scaled)
     scores = model.score_samples(X_scaled)
     
@@ -112,15 +86,9 @@ def train_optimized_model(X: np.ndarray, model_type: str, use_robust_scaler=Fals
     
     return model, scaler, scores
 
-
-# ======================
-# MAIN TRAINING PIPELINE
-# ======================
-
-def train_main_models():
-    """Train the 3 main models with enhanced features"""
+def train_unsupervised_models():
     print("=" * 70)
-    print("TRAINING MAIN MODELS WITH ENHANCED FEATURES")
+    print("TRAINING MODELS")
     print("=" * 70)
     
     data_dir = Path("data/raw")
@@ -132,10 +100,11 @@ def train_main_models():
         df = pd.read_csv(merged_path)
         print(f"Loaded {len(df)} records")
         
-        # Use the feature engineering module
-        X = prepare_merged_features(df)
+        kyc_feat = prepare_kyc_features(df)
+        biz_feat = prepare_business_features(df)
+        X = np.column_stack([kyc_feat, biz_feat])
         
-        model, scaler, _ = train_optimized_model(X, "merged", use_robust_scaler=True)
+        model, scaler, _ = train_unsupervised_model(X, "merged", use_robust_scaler=True)
         
         joblib.dump(model, MODELS_DIR / "merged_model.pkl")
         joblib.dump(scaler, MODELS_DIR / "merged_scaler.pkl")
@@ -150,10 +119,8 @@ def train_main_models():
         df = pd.read_csv(txn_path)
         print(f"Loaded {len(df)} records")
         
-        # Use the feature engineering module
         X = prepare_transaction_features(df)
-        
-        model, scaler, _ = train_optimized_model(X, "transaction")
+        model, scaler, _ = train_unsupervised_model(X, "transaction")
         
         joblib.dump(model, MODELS_DIR / "transaction_model.pkl")
         joblib.dump(scaler, MODELS_DIR / "transaction_scaler.pkl")
@@ -167,10 +134,8 @@ def train_main_models():
         df = pd.read_csv(txn_path)
         print(f"Loaded {len(df)} transaction records")
         
-        # Use the feature engineering module
         X, customer_ids = prepare_customer_features(df)
-        
-        model, scaler, _ = train_optimized_model(X, "customer", use_robust_scaler=True)
+        model, scaler, _ = train_unsupervised_model(X, "customer", use_robust_scaler=True)
         
         joblib.dump(model, MODELS_DIR / "customer_model.pkl")
         joblib.dump(scaler, MODELS_DIR / "customer_scaler.pkl")
@@ -189,4 +154,4 @@ def train_main_models():
 
 
 if __name__ == "__main__":
-    train_main_models()
+    train_unsupervised_models()

@@ -1,17 +1,17 @@
 """
 FastAPI Application Entry Point
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.v1.router import api_router
 from app.middleware.error_handler import add_error_handlers
 from app.middleware.rate_limiter import RateLimitMiddleware
-from app.services.anomaly_detector import AnomalyDetectorService
-from app.core.security import get_security_headers
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.services.unsupervised_anomaly_detector import UnsupervisedAnomalyDetectorService
+from app.services.supervised_anomaly_detector import SupervisedAnomalyDetectorService
 
 # Setup logging
 logger = setup_logging()
@@ -23,7 +23,7 @@ app = FastAPI(
     version=settings.VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
 
 # CORS middleware
@@ -38,17 +38,7 @@ app.add_middleware(
 # Rate limiting middleware
 app.add_middleware(RateLimitMiddleware)
 
-
 # Security headers middleware
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        headers = get_security_headers()
-        for key, value in headers.items():
-            response.headers[key] = value
-        return response
-
-
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Add error handlers
@@ -57,22 +47,36 @@ add_error_handlers(app)
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Global service instance
-anomaly_service = None
+# Global service instances
+unsupervised_anomaly_service = None
+supervised_anomaly_service = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    global anomaly_service
+    global unsupervised_anomaly_service, supervised_anomaly_service
     logger.info("Starting up application...")
 
-    # Initialize anomaly detector service
-    anomaly_service = AnomalyDetectorService()
-    await anomaly_service.initialize()
+    # Initialize unsupervised anomaly detector service
+    try:
+        unsupervised_anomaly_service = UnsupervisedAnomalyDetectorService()
+        await unsupervised_anomaly_service.initialize()
+        app.state.unsupervised_anomaly_service = unsupervised_anomaly_service
+        logger.info("✓ Unsupervised anomaly detection service initialized")
+    except Exception as e:
+        logger.warning(f"⚠ Unsupervised models not available: {e}")
+        app.state.unsupervised_anomaly_service = None
 
-    # Store in app state for access in endpoints
-    app.state.anomaly_service = anomaly_service
+    # Initialize supervised anomaly detector service
+    try:
+        supervised_anomaly_service = SupervisedAnomalyDetectorService()
+        await supervised_anomaly_service.initialize()
+        app.state.supervised_anomaly_service = supervised_anomaly_service
+        logger.info("✓ Supervised anomaly detection service initialized")
+    except Exception as e:
+        logger.warning(f"⚠ Supervised models not available: {e}")
+        app.state.supervised_anomaly_service = None
 
     logger.info("Application startup complete!")
 
@@ -92,7 +96,7 @@ async def root():
         "version": settings.VERSION,
         "status": "running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
 
 
@@ -104,21 +108,38 @@ async def health_check():
         "version": settings.VERSION,
     }
 
-    if anomaly_service:
-        service_health.update({
-            "kyc_model_loaded": anomaly_service.kyc_model is not None,
-            "transaction_model_loaded": anomaly_service.transaction_model is not None,
-        })
+    if unsupervised_anomaly_service:
+        service_health.update(
+            {
+                "unsupervised_kyc_model_loaded": unsupervised_anomaly_service.kyc_model is not None,
+                "unsupervised_transaction_model_loaded": unsupervised_anomaly_service.transaction_model
+                is not None,
+                "unsupervised_combined_model_loaded": unsupervised_anomaly_service.combined_model
+                is not None,
+            }
+        )
+
+    if supervised_anomaly_service:
+        service_health.update(
+            {
+                "supervised_kyc_model_loaded": supervised_anomaly_service.kyc_model is not None,
+                "supervised_transaction_model_loaded": supervised_anomaly_service.transaction_model
+                is not None,
+                "supervised_combined_model_loaded": supervised_anomaly_service.combined_model
+                is not None,
+            }
+        )
 
     return service_health
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )

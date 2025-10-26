@@ -1,14 +1,17 @@
 """
 Application Configuration
 """
-from pydantic_settings import BaseSettings
 from typing import List
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # Application
     PROJECT_NAME: str = "KYC & Transaction Anomaly Detection API"
-    PROJECT_DESCRIPTION: str = "Anomaly detection service using Isolation Forest with SHAP explanations"
+    PROJECT_DESCRIPTION: str = (
+        "Anomaly detection service using Isolation Forest with SHAP explanations"
+    )
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
@@ -39,6 +42,18 @@ class Settings(BaseSettings):
     MODELS_DIR: str = "data/models"
     COMBINED_MODEL_PATH: str = "data/models/merged_model.pkl"
     COMBINED_SCALER_PATH: str = "data/models/merged_scaler.pkl"
+    CUSTOMER_MODEL_PATH: str = "data/models/customer_model.pkl"
+    CUSTOMER_SCALER_PATH: str = "data/models/customer_scaler.pkl"
+
+    # Supervised Models (Random Forest)
+    KYC_SUPERVISED_MODEL_PATH: str = "data/models/kyc_supervised_model.pkl"
+    KYC_SUPERVISED_SCALER_PATH: str = "data/models/kyc_supervised_scaler.pkl"
+    TRANSACTION_SUPERVISED_MODEL_PATH: str = "data/models/transaction_supervised_model.pkl"
+    TRANSACTION_SUPERVISED_SCALER_PATH: str = "data/models/transaction_supervised_scaler.pkl"
+    COMBINED_SUPERVISED_MODEL_PATH: str = "data/models/merged_supervised_model.pkl"
+    COMBINED_SUPERVISED_SCALER_PATH: str = "data/models/merged_supervised_scaler.pkl"
+    CUSTOMER_SUPERVISED_MODEL_PATH: str = "data/models/customer_supervised_model.pkl"
+    CUSTOMER_SUPERVISED_SCALER_PATH: str = "data/models/customer_supervised_scaler.pkl"
 
     # Isolation Forest Parameters
     CONTAMINATION: float = 0.1
