@@ -264,6 +264,12 @@ Run the migration script to initialize data-type-specific configurations:
 cd decision
 python scripts/migrate_configs.py
 ```
+
+### 6. Sample Data seed
+```bash
+Run ./create-rules-for-data-types.sh
+Run ./backend/seed_cases.sh
+```
 ## v2
 
 - Model driven risk aggrigation engine
