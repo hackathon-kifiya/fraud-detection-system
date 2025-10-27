@@ -1,3 +1,6 @@
+<<<<<<< HEAD
+node_modules/
+=======
 # Dependencies
 node_modules/
 __pycache__/
@@ -55,3 +58,4 @@ target/
 frontend/build/
 backend/main
 
+>>>>>>> a3e1b0c6a1884d4c8784a966fb3a6109431e4eb1

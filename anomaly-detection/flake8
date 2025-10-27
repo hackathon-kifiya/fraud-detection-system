@@ -1,0 +1,63 @@
+[flake8]
+# Maximum line length
+max-line-length = 100
+
+# Maximum complexity for functions
+max-complexity = 15
+
+# Exclude directories from linting
+exclude =
+.git,
+__pycache__,
+.venv,
+venv,
+env,
+ENV,
+.env,
+build,
+dist,
+*.egg-info,
+.pytest_cache,
+.mypy_cache,
+node_modules,
+data/raw,
+data/processed,
+data/models,
+notebooks/.ipynb_checkpoints
+
+# Error codes to ignore
+ignore =
+E203,
+E266,
+E501,
+W503,
+W504,
+E402,
+F401
+
+# Per-file ignores
+per-file-ignores =
+__init__.py:F401,E402,
+*/migrations/*.py:E501,
+
+
+# Show source code for each error
+show-source = True
+
+# Show the relevant text for each error
+show-pep8 = True
+
+# Count the number of errors
+count = True
+
+# Enable specific error checking
+select = E,W,F,C,N
+
+# Docstring conventions
+docstring-convention = google
+
+# Import order style (compatible with isort)
+import-order-style = google
+
+# Application import names (adjust based on your project structure)
+application-import-names = app,scripts

@@ -1,0 +1,36 @@
+# FastAPI and Server
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+
+# Machine Learning
+scikit-learn==1.6.1
+numpy
+scipy
+
+# SHAP for Explainability
+shap
+
+# Model Persistence
+joblib
+
+# Logging and Monitoring
+python-json-logger
+prometheus-client
+
+# Database (Optional)
+sqlalchemy
+alembic
+
+# Utilities
+python-dotenv
+pyyaml
+
+# HTTP Client
+httpx
+aiohttp
+
+# Data Validation
+email-validator

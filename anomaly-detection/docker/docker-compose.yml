@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: anomaly-detection-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount data directory for models and logs
+      - ../data:/app/data
+      # Mount .env file if needed
+      - ../.env:/app/.env:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - API_KEY_ENABLED=${API_KEY_ENABLED:-false}
+      - API_KEY=${API_KEY:-test-api-key}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - anomaly-network
+
+  # Development service with hot reload
+  api-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: anomaly-detection-api-dev
+    ports:
+      - "8001:8000"  # Different port to avoid conflicts
+    volumes:
+      - ../:/app  # Mount entire app for hot reload
+      - ../data:/app/data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    profiles:
+      - dev  # Only start with --profile dev flag
+    networks:
+      - anomaly-network
+
+  # Optional: Redis for caching (uncomment if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: anomaly-detection-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - anomaly-network
+
+  # Optional: PostgreSQL for audit logs (uncomment if needed)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: anomaly-detection-db
+  #   environment:
+  #     - POSTGRES_DB=anomaly_detection
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - anomaly-network
+
+networks:
+  anomaly-network:
+    driver: bridge
+
+volumes:
+  # Uncomment if using Redis
+  # redis-data:
+  # Uncomment if using PostgreSQL
+  # postgres-data:
+
