@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -11,29 +11,68 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U frauduser -d frauddb"]
       interval: 10s
       timeout: 5s
       retries: 5
-  python-stats:
-    build: ./python-stats
-    ports:
-      - "5001:5001"
+  anomaly-detection-engine:
+    build: ./anomaly-detection-engine
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    ports:
+      - "5001:5001"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
-  java-engine:
-    build: ./java-engine
-    ports:
-      - "8082:8081"
+  prediction-engine:
+    build: ./prediction-engine
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    ports:
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  decision-service:
+    build: ./decision
+    environment:
+      - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+      - DATA_MANAGEMENT_SERVICE_URL=http://data-management-service:5004
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  data-management-service:
+    build: ./data-management-service
+    environment:
+      - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+    ports:
+      - "5004:5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rule-engine:
+    build: ./rule-engine
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/frauddb
+      - DATABASE_USER=frauduser
+      - DATABASE_PASSWORD=fraudpass
+      - SERVER_PORT=8081
+      - SAMPLE_DATA_DIRECTORY=/app/data
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,28 +80,62 @@ services:
 
   backend:
     build: ./backend
-    ports:
-      - "8081:8080"
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
-      - ENGINE_URL=http://java-engine:8081/api
-      - PYTHON_STATS_URL=http://python-stats:5001
+      - ENGINE_URL=http://rule-engine:8081
+      - ANOMALY_DETECTION_ENGINE_URL=http://anomaly-detection-engine:5001
+      - PREDICTIVE_ENGINE_URL=http://prediction-engine:5002
+      - DECISION_SERVICE_URL=http://decision-service:5003
+      - DATA_MANAGEMENT_SERVICE_URL=http://data-management-service:5004
+      - PYTHON_STATS_URL=http://anomaly-detection-engine:5001
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://frontend:3000,http://frontend:3001
+      - ENABLE_SWAGGER=true
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-      java-engine:
+      rule-engine:
+        condition: service_started
+      anomaly-detection-engine:
+        condition: service_started
+      prediction-engine:
+        condition: service_started
+      decision-service:
+        condition: service_started
+      data-management-service:
         condition: service_started
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - REACT_APP_BACKEND_URL=http://localhost:8080
+        - REACT_APP_RULE_ENGINE_URL=http://localhost:8081
+        - REACT_APP_DECISION_SERVICE_URL=http://localhost:5003
+        - REACT_APP_DATA_MANAGEMENT_SERVICE_URL=http://localhost:5004
     ports:
-      - "3001:3000"
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8081
+      - "3000:3000"
     depends_on:
       - backend
+      - rule-engine
+      - data-management-service
     restart: unless-stopped
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "3002:3001"
+    restart: unless-stopped
+    environment:
+      - UPTIME_KUMA_HOST=0.0.0.0
+      - UPTIME_KUMA_PORT=3001
+
 
 volumes:
   postgres_data:
+  uptime_kuma_data:

@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
@@ -6,23 +6,27 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies including serve
+RUN npm install && npm install -g serve
 
 # Copy source code
 COPY . .
 
+# Set build-time environment variables
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+
+ARG REACT_APP_RULE_ENGINE_URL
+ENV REACT_APP_RULE_ENGINE_URL=$REACT_APP_RULE_ENGINE_URL
+
+ARG REACT_APP_DECISION_SERVICE_URL
+ENV REACT_APP_DECISION_SERVICE_URL=$REACT_APP_DECISION_SERVICE_URL
+
+ARG REACT_APP_DATA_MANAGEMENT_SERVICE_URL
+ENV REACT_APP_DATA_MANAGEMENT_SERVICE_URL=$REACT_APP_DATA_MANAGEMENT_SERVICE_URL
+
 # Build the application
 RUN npm run build
-
-# Production stage
-FROM nginx:alpine
-
-# Copy built app from builder stage
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
 EXPOSE 3000
@@ -31,6 +35,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the application using serve
+CMD ["serve", "-s", "build", "-l", "3000"]
 

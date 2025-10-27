@@ -1,176 +1,245 @@
-# Fraud Detection MVP
-
-A comprehensive fraud detection system for embedded finance with PostgreSQL database, Python fraud detection engine, Golang backend API, and React frontend.
+MAX - A fraud detection system for embedded finance.
 
 ## Architecture
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   React     │    │   Golang    │    │   Python    │
-│  Frontend   │◄──►│   Backend   │◄──►│   Engine    │
-│  (Port 3000)│    │  (Port 8080)│    │  (Port 5001)│
-└─────────────┘    └─────────────┘    └─────────────┘
-                           │
-                           ▼
-                   ┌─────────────┐
-                   │ PostgreSQL  │
-                   │  (Port 5432)│
-                   └─────────────┘
+                        ┌─────────────────┐
+                        │    Frontend     │
+                        │     (React)     │
+                        └────────┬────────┘
+                                 │
+                                 ↓
+                        ┌─────────────────┐
+                        │    Backend      │
+                        │   (Go/Gin)      │
+                        └────────┬────────┘
+                                 │
+              ┌──────────────────┼────────────────────────┼────────────────────┼───────────────────┐
+              │                  │                        │                    │                   │
+              ↓                  ↓                        ↓                    ↓                   ↓
+    ┌──────────────────┐  ┌──────────────────┐   ┌──────────────────┐  ┌─────────────────┐ ┌─────────────────┐   
+    │ Data Management  │  │   Rule Engine    │   │  Decision Service│  │ Anomaly Engine  │ │ Prediction Eng  │ 
+    │    Service       │  ┤   (Java/Spring)  │   │   (Python)       │  │   (Python)      │ │   (Python)      │
+    │   (Python)       │  └──────────────────┘   └──────────────────┘  └─────────────────┘ └─────────────────┘
+    └──────────────────┘                                         
+  
 ```
 
-## Prerequisites
+**Key Features:**
+- **Data-Type Driven**: Centralized data type management
+- **Hierarchical Configuration**: System defaults + per-data-type overrides
+- **Flexible Decision Logic**: Data-type-specific risk thresholds and weights
+- **Integrated Engines**: Rule-based, ML-based, and anomaly detection
+## Data Flow
 
-- Docker
-- Docker Compose
+```
+        ┌────────────────────────────────────────┐
+        │         Data Ingestion                 │
+        │  (Transactions, KYC, Loans, etc.)      │
+        └────────────────┬───────────────────────┘
+                         │
+                         ↓
+        ┌────────────────────────────────────────┐
+        │            BACKEND (Go)                │
+        │  • Orchestration & Workflows           │
+        │  • User Management (JWT Auth)          │
+        │  • Input Validation & Sanitization     │
+        │  • Data Type Routing                   │
+        └────────────────┬───────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         │               │               │
+         ↓               ↓               ↓
+┌──────────────┐  ┌────────────┐  ┌─────────────┐
+│ RULE ENGINE  │  │ PREDICTION │  │  ANOMALY    │
+│   (Java)     │  │   ENGINE   │  │ DETECTION   │
+│              │  │  (Python)  │  │  (Python)   │
+│ • DRL Rules  │  │ • XGBoost  │  │ • Isolation │
+│ • Drools     │  │ • Features │  │ • Patterns  │
+│ • Dynamic    │  │ • ML Model │  │ • Outliers  │
+└──────┬───────┘  └─────┬──────┘  └──────┬──────┘
+       │ Normalized     │ Normalized     │ Normalized
+       │ ScoreRule      │ ScoreML        │ ScoreAnomaly
+       │ (0-1)          │ (0-1)          │ (0-1)
+       │                │                │
+       └────────────────┼────────────────┘
+                        │
+                        ↓
+        ┌────────────────────────────────────────┐
+        │   DECISION SERVICE (Python)            │
+        │                                        │
+        │   Data-Type-Specific Configuration:    │
+        │   • Transactions: W₁=50%, W₂=30%, W₃=20%│
+        │   • KYC: W₁=40%, W₂=35%, W₃=25%        │
+        │   • System Default: W₁=40%, W₂=35%, W₃=25%│
+        │                                        │
+        │   Score = W₁×Rule + W₂×ML + W₃×Anomaly │
+        │                                        │
+        │   Thresholds (per data type):          │
+        │   ≤ 25%  → Auto-Approve                │
+        │   25-85% → Human Review                │
+        │   ≥ 85%  → Auto-Reject                 │
+        └────────────────┬───────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         │               │               │
+         ↓               ↓               ↓
+    ┌─────────┐  ┌──────────────┐  ┌──────────┐
+    │ APPROVE │  │ HUMAN REVIEW │  │  REJECT  │
+    └─────────┘  └──────┬───────┘  └──────────┘
+                        │
+                        │ Auditor Classification
+                        ↓
+        ┌────────────────────────────────────────┐
+        │        FEEDBACK LOOP                   │
+        │  • Human Labels → Training Data        │
+        │  • Model Retraining & Optimization     │
+        │  • Rule Updates & Refinement           │
+        └────────────────────────────────────────┘
+```
+
+
+## Use cases
+
+https://docs.google.com/spreadsheets/d/1YFAoreEE3M_yJxrjLkx92qoIPFh0YinAQshdZ5iMICQ/edit?usp=sharing
+
+
+## Components
+
+### Data Management Service (Python/FastAPI)
+- **Centralized Data Types**: Single source of truth for all data type schemas
+- **Schema Management**: Define and validate data structures for transactions, KYC, loans, etc.
+- **API**: RESTful API for data type CRUD operations
+- **Integration**: Used by all services for schema validation and discovery
+
+### Rule Engine (Java/Spring Boot)
+- **Dynamic Data Types**: Support for any data type via data-management-service integration
+- **DRL Rules**: Drools-based rule engine with configurable rules
+- **Real-time Evaluation**: Evaluate data against rules in milliseconds
+- **Version Control**: Rule versioning and rollback capabilities
+- **API**: RESTful API for rule evaluation and management
+- **Database**: PostgreSQL for rule storage and versioning
+
+### Decision Service (Python/FastAPI)
+- **Hierarchical Configuration**: System-wide defaults + per-data-type overrides
+- **Smart Aggregation**: Weighted scoring from rule, ML, and anomaly engines
+- **Flexible Thresholds**: Data-type-specific approval/rejection thresholds
+- **Non-linear Scoring**: Optional ML-based weight optimization
+- **API**: RESTful API for decision-making and configuration
+
+### Anomaly Detection Engine (Python/FastAPI)
+- **Unsupervised Learning**: Isolation Forest for outlier detection
+- **Pattern Recognition**: Identify unusual transaction patterns
+- **Real-time Scoring**: Return anomaly scores (0-1) for transactions
+- **API**: RESTful API for anomaly detection
+
+### Prediction Engine (Python/FastAPI)
+- **ML Models**: XGBoost/Neural networks for fraud prediction
+- **Feature Engineering**: Automatic feature extraction from transaction data
+- **Real-time Inference**: Fast prediction serving
+- **API**: RESTful API for predictions
+
+### Backend (Go/Gin)
+- **Orchestration**: Coordinates all engines for fraud detection workflow
+- **User Management**: JWT-based authentication and authorization
+- **Flagged Items**: Automatic creation and management of suspicious items
+- **Audit Trail**: Complete audit logging for compliance
+- **API Gateway**: RESTful API for all frontend operations
+- **Database**: PostgreSQL for application data
+
+### Frontend (React/Material-UI)
+- **Dashboard**: Real-time fraud detection metrics and KPIs
+- **Data Type Management**: Create and manage custom data types
+- **Rule Management**: Visual interface for creating and testing rules
+- **Decision Configuration**: Per-data-type risk thresholds and weights
+- **Case Management**: Review and classify flagged items
+- **Analytics**: Performance metrics, reports, and visualizations
+- **User Management**: Admin interface for user and role management
+
+## Key Features
+
+### 1. Data-Type-Driven Architecture
+The system features a centralized data management service that enables:
+- **Any Data Type**: Define custom data types (transactions, KYC, loans, repayments, etc.)
+- **Schema Validation**: Automatic validation of all data against defined schemas
+- **Cross-Service Integration**: All services use the same data type definitions
+- **No Code Changes**: Add new data types without modifying any service
+
+### 2. Dynamic Rule Engine
+Fully configurable rule engine with:
+- **DRL Rules**: Write rules in Drools Rule Language
+- **Real-time Evaluation**: Evaluate data against rules in real-time
+- **Data Type Specific**: Different rules for different data types
+- **Version Control**: Rule versioning and rollback capabilities
+
+### 3. Hierarchical Decision Configuration
+Sophisticated decision-making with:
+- **System Defaults**: Global configuration for all data types
+- **Per-Data-Type Overrides**: Custom thresholds and weights per data type
+- **Flexible Weights**: Configure importance of each engine (rule, ML, anomaly)
+- **Dynamic Thresholds**: Data-type-specific auto-approve/reject thresholds
+- **Visual Configuration**: Easy-to-use UI for configuration management
+
+### 4. Multi-Engine Detection
+Comprehensive fraud detection using:
+- **Rule-Based**: Deterministic business logic and blacklists
+- **ML-Based**: Predictive models trained on historical fraud patterns
+- **Anomaly-Based**: Statistical outlier detection for unusual behavior
+- **Intelligent Aggregation**: Smart combination of all engine scores
+
+## Documentation
+
+- [Rule Engine Integration](./RULE_ENGINE_INTEGRATION.md) - Detailed rule engine documentation
+- [Decision Service Integration](./DECISION_DATA_TYPE_INTEGRATION.md) - Data-type-specific configuration guide
+- [Plan Implementation Summary](./PLAN_IMPLEMENTATION_SUMMARY.md) - Development roadmap and status
 
 ## Quick Start
 
-1. Clone the repository
-2. Copy environment file:
-   ```bash
-   cp .env.example .env
-   ```
-3. Start all services:
-   ```bash
-   docker-compose up --build
-   ```
-4. Access the application:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8080
-   - Engine API: http://localhost:5001
-
-## Demo Workflow
-
-1. **Upload Sample Data**: Use the CSV templates in the `templates/` directory
-2. **Run Detection**: Click "Run Fraud Detection" to analyze the data
-3. **Review Results**: Check the dashboard for flagged items
-4. **Verify Items**: Mark items as "Fraud" or "Safe" for verification
-
-## Usage
-
-### 1. Upload Data
-- Navigate to the upload page
-- Use the provided CSV templates in the `templates/` directory
-- Upload each data type (transactions, loan_requests, credit_history, kyc, repayments)
-- Click "Trigger Detection" to run fraud analysis
-
-### 2. Review Flagged Items
-- Go to the dashboard to view flagged items
-- Review risk scores and reasons
-- Mark items as "Fraud" or "Safe" for verification
-
-## API Endpoints
-
-### Backend API (Port 8080)
-
-#### Upload Endpoints
-- `POST /upload/transactions` - Upload transaction data (CSV)
-- `POST /upload/loan_requests` - Upload loan request data (CSV)
-- `POST /upload/credit_history` - Upload credit history data (CSV)
-- `POST /upload/kyc` - Upload KYC data (CSV)
-- `POST /upload/repayments` - Upload repayment data (CSV)
-
-#### Detection & Review
-- `POST /api/detect` - Trigger fraud detection
-  - Body: `{"days_back": 30}` (optional)
-  - Response: Detection results with flagged counts
-- `GET /api/flagged` - Get flagged items with pagination
-  - Query params: `status`, `type`, `user_id`, `page`, `limit`
-- `GET /api/flagged/:id` - Get specific flagged item
-- `POST /api/verify/:id` - Verify flagged item
-  - Body: `{"status": "fraud"|"safe"}`
-- `GET /api/flagged/stats` - Get flagged items statistics
-- `GET /api/detect/status` - Get detection system status
-
-#### Health Check
-- `GET /health` - Backend health status
-
-### Engine API (Port 5001)
-
-- `POST /detect` - Run fraud detection analysis
-  - Body: `{"days_back": 30}` (optional)
-  - Response: Detailed detection results
-- `GET /health` - Engine health status
-- `GET /detect/status` - Engine configuration and status
-
-## CSV Templates
-
-Use the templates in the `templates/` directory for data upload:
-
-- `transactions.csv` - Transaction history (txn_id, user_id, amount, timestamp, type, payment_method, items, account_balance)
-- `loan_requests.csv` - Loan applications (loan_id, user_id, amount_requested, purpose, request_timestamp)
-- `credit_history.csv` - Credit scores and history (user_id, credit_score, past_loans, defaults_count)
-- `kyc.csv` - Know Your Customer data (user_id, verified_status, documents, verification_timestamp)
-- `repayments.csv` - Loan repayments (repayment_id, user_id, loan_id, amount, timestamp, status)
-
-### Sample Data
-Each template includes 2-3 example rows with realistic data for testing the fraud detection system.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Database connection errors**: Ensure PostgreSQL is healthy before starting other services
-2. **Port conflicts**: Check if ports 3000, 5001, 8080, or 5432 are already in use
-3. **CSV upload failures**: Verify CSV format matches template headers exactly
-
-### Logs
-
-View logs for specific services:
+### 1. Start All Services
 ```bash
-docker-compose logs postgres
-docker-compose logs engine
-docker-compose logs backend
-docker-compose logs frontend
+docker-compose up -d
 ```
 
-### Reset Database
-
-To reset the database and start fresh:
-```bash
-docker-compose down -v
-docker-compose up --build
+### 2. Access Services
+```
+Frontend:               http://localhost:3000
+Backend API:            http://localhost:8080
+Rule Engine:            http://localhost:8081
+Data Management:        http://localhost:5004
+Decision Service:       http://localhost:5003
+Anomaly Detection:      http://localhost:5001
+Prediction Engine:      http://localhost:5002
+PostgreSQL Database:    localhost:5433
 ```
 
-## Development
-
-### Running Individual Services
-
-```bash
-# Database only
-docker-compose up postgres
-
-# Backend only (requires database)
-docker-compose up postgres backend
-
-# Frontend only (requires backend)
-docker-compose up postgres backend frontend
+### 3. Default Login
+```
+Username: admin@fraud.com
+Password: admin123
 ```
 
-### Adding New Detection Rules
+### 4. Test Integration
+```bash
+# Test rule engine integration
+./rule-engine/test-rule-engine-workflow.sh
 
-1. Edit `engine/detection.py`
-2. Add new rule functions in the appropriate check method
-3. Update the main detection pipeline in `run_detection()`
-4. Rebuild the engine service: `docker-compose up --build engine`
+# Test data type synchronization
+./test-datatype-sync.sh
 
-### Database Schema
+# Full system integration test
+./test-integration.sh
+```
 
-The system uses PostgreSQL with 6 main tables:
-- `transactions` - Financial transactions with JSONB items field
-- `loan_requests` - Loan applications and requests
-- `credit_history` - User credit scores and loan history
-- `kyc` - Know Your Customer verification data
-- `repayments` - Loan repayment records
-- `flagged_items` - Fraud detection results and verification status
+### 5. Initial Setup (First Time Only)
 
-### Fraud Detection Rules
+Run the migration script to initialize data-type-specific configurations:
+```bash
+cd decision
+python scripts/migrate_configs.py
+```
+## v2
 
-The engine implements multiple rule categories:
-- **Transaction Rules**: Multiple credits, rejections, unusual amounts, nighttime activity
-- **Loan Rules**: Multiple requests, amount vs credit score
-- **Credit Rules**: Multiple defaults, low credit scores
-- **KYC Rules**: Unverified status
-- **Repayment Rules**: Late payments, duplicate IDs
+- Model driven risk aggrigation engine
 
-Risk scoring combines statistical analysis (40%), rule violations (30%), and new data checks (30%).
+Use a second machine learning model (a "meta-learner" or "stacking model") that takes the three engine scores (ScoreR​,ScoreML​,ScoreDA​) as its input features and outputs the final risk score. This allows for a non-linear combination of the scores.
+

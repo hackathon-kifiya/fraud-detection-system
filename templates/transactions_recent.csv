@@ -1,6 +1,0 @@
-txn_id,user_id,amount,timestamp,type,payment_method,items,account_balance
-550e8400-e29b-41d4-a716-446655440101,550e8400-e29b-41d4-a716-446655440010,150.50,2024-10-21T10:30:00Z,debit,credit_card,"[{""item_id"": ""item_001"", ""quantity"": 1}]",1250.75
-550e8400-e29b-41d4-a716-446655440102,550e8400-e29b-41d4-a716-446655440010,25.00,2024-10-21T14:22:00Z,debit,debit_card,"[{""item_id"": ""item_002"", ""quantity"": 2}]",1225.75
-550e8400-e29b-41d4-a716-446655440103,550e8400-e29b-41d4-a716-446655440011,500.00,2024-10-21T16:45:00Z,credit,bank_transfer,"[{""item_id"": ""item_003"", ""quantity"": 1}]",5000.00
-550e8400-e29b-41d4-a716-446655440104,550e8400-e29b-41d4-a716-446655440010,5000.00,2024-10-21T18:00:00Z,credit,bank_transfer,"[{""item_id"": ""item_004"", ""quantity"": 1}]",6250.75
-550e8400-e29b-41d4-a716-446655440105,550e8400-e29b-41d4-a716-446655440010,10000.00,2024-10-21T19:00:00Z,credit,bank_transfer,"[{""item_id"": ""item_005"", ""quantity"": 1}]",16250.75
