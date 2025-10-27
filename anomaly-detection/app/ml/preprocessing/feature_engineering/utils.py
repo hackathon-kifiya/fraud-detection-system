@@ -234,133 +234,105 @@ def prepare_combined_features_from_df(df: pd.DataFrame) -> np.ndarray:
 def prepare_customer_features_from_df(df: pd.DataFrame) -> np.ndarray:
     """
     Prepare customer-level features from transaction DataFrame
-
-    Args:
-        df: DataFrame containing transaction data
-
-    Returns:
-        numpy array of prepared customer features
+    MUST match training_features.py exactly for consistency
     """
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    
+    customer_ids = []
     customer_features = []
-
-    for _, customer_df in df.groupby("customer_id"):
+    
+    for customer_id, group in df.groupby("customer_id"):
+        customer_ids.append(customer_id)
+        n_txns = len(group)
         features = []
+        
+        # Transaction volume
+        features.extend([n_txns, np.log1p(n_txns)])
 
-        total_transactions = len(customer_df)
-        features.append(total_transactions)
+        # Credit/Debit stats
+        features.extend([
+            group["credit"].sum(), group["debit"].sum(),
+            group["credit"].mean(), group["debit"].mean(),
+            group["credit"].max(), group["debit"].max(),
+            group["credit"].std() if n_txns > 1 else 0.0,
+            group["debit"].std() if n_txns > 1 else 0.0
+        ])
 
-        total_credit = customer_df["credit"].sum()
-        total_debit = customer_df["debit"].sum()
-        avg_credit = customer_df["credit"].mean()
-        avg_debit = customer_df["debit"].mean()
-        max_credit = customer_df["credit"].max()
-        max_debit = customer_df["debit"].max()
-        features.extend(
-            [
-                total_credit,
-                total_debit,
-                avg_credit,
-                avg_debit,
-                max_credit,
-                max_debit,
-            ]
-        )
+        # CD ratio
+        features.append(np.log1p(features[-8] / (features[-7] + 1)))
+        
+        # Balance stats
+        features.extend([
+            group["closingBalance"].mean(), group["closingBalance"].max(),
+            group["closingBalance"].min(), group["closingBalance"].std() if n_txns > 1 else 0.0
+        ])
 
-        avg_balance = customer_df["closingBalance"].mean()
-        max_balance = customer_df["closingBalance"].max()
-        min_balance = customer_df["closingBalance"].min()
-        balance_volatility = customer_df["closingBalance"].std()
-        features.extend([avg_balance, max_balance, min_balance, balance_volatility])
+        # Transaction amounts
+        txn_amt = group["credit"] - group["debit"]
+        features.extend([
+            txn_amt.mean(), txn_amt.max(), txn_amt.min(),
+            txn_amt.std() if n_txns > 1 else 0.0, txn_amt.median()
+        ])
 
-        transaction_amounts = customer_df["credit"] - customer_df["debit"]
-        features.extend(
-            [
-                transaction_amounts.mean(),
-                transaction_amounts.max(),
-                transaction_amounts.min(),
-                transaction_amounts.std(),
-            ]
-        )
+        # Source diversity
+        total = max(n_txns, 1)
+        source_counts = group["source"].value_counts()
+        features.extend([
+            len(source_counts),
+            source_counts.iloc[0] / total if len(source_counts) > 0 else 0.0,
+            group["source"].str.contains("CASH DEPOSIT", case=False, na=False).sum() / total,
+            group["source"].str.contains("FUND TRANSFER", case=False, na=False).sum() / total,
+            group["source"].str.contains("CASH WITHDRAW", case=False, na=False).sum() / total,
+            group["source"].str.contains("TELE BIRR", case=False, na=False).sum() / total
+        ])
 
-        source_counts = customer_df["source"].value_counts()
-        unique_sources = len(source_counts)
-        most_common_source_ratio = (
-            source_counts.iloc[0] / total_transactions if total_transactions > 0 else 0
-        )
+        # Temporal patterns
+        hours = group["date"].dt.hour
+        features.extend([
+            hours.mean(), hours.std() if n_txns > 1 else 0.0,
+            ((hours >= 22) | (hours <= 6)).sum() / total,
+            ((hours >= 9) & (hours <= 17)).sum() / total
+        ])
+        
+        dow = group["date"].dt.dayofweek
+        features.extend([
+            (dow < 5).sum() / total,
+            (dow >= 5).sum() / total
+        ])
 
-        cash_deposit_ratio = (
-            customer_df["source"] == "CASH DEPOSIT"
-        ).sum() / total_transactions
-        fund_transfer_ratio = (
-            customer_df["source"] == "FUND TRANSFER"
-        ).sum() / total_transactions
-        cash_withdraw_ratio = (
-            customer_df["source"] == "CASH WITHDRAW"
-        ).sum() / total_transactions
-        tele_birr_ratio = (
-            (customer_df["source"] == "TELE BIRR INCOMING")
-            | (customer_df["source"] == "TELE BIRR OUT GOING")
-        ).sum() / total_transactions
-
-        features.extend(
-            [
-                unique_sources,
-                most_common_source_ratio,
-                cash_deposit_ratio,
-                fund_transfer_ratio,
-                cash_withdraw_ratio,
-                tele_birr_ratio,
-            ]
-        )
-
-        customer_df["date"] = pd.to_datetime(customer_df["date"])
-        avg_hour = customer_df["date"].dt.hour.mean()
-        hour_std = customer_df["date"].dt.hour.std()
-        night_transactions = (
-            (customer_df["date"].dt.hour >= 22) | (customer_df["date"].dt.hour <= 6)
-        ).sum() / total_transactions
-        features.extend([avg_hour, hour_std, night_transactions])
-
-        weekday_transactions = (
-            customer_df["date"].dt.dayofweek < 5
-        ).sum() / total_transactions
-        weekend_transactions = (
-            customer_df["date"].dt.dayofweek >= 5
-        ).sum() / total_transactions
-        features.extend([weekday_transactions, weekend_transactions])
-
-        if total_transactions > 1:
-            time_diffs = (
-                customer_df["date"].sort_values().diff().dt.total_seconds() / 3600
-            )
-            features.extend([time_diffs.mean(), time_diffs.min(), time_diffs.max()])
+        # Velocity
+        if n_txns > 1:
+            diffs = group["date"].sort_values().diff().dt.total_seconds().fillna(0) / 3600
+            features.extend([diffs.mean(), diffs.median(), diffs.min(), diffs.max(), diffs.std()])
+            features.append((diffs < 1).sum() / max(n_txns - 1, 1))
         else:
-            features.extend([0, 0, 0])
+            features.extend([0.0] * 6)
 
-        avg_narrative_length = customer_df["narrative"].str.len().mean()
-        unique_narratives = customer_df["narrative"].nunique()
-        narrative_diversity = unique_narratives / total_transactions
-        features.extend([avg_narrative_length, unique_narratives, narrative_diversity])
+        # Narrative patterns
+        narr = group["narrative"].fillna("")
+        features.extend([
+            narr.str.len().mean(), narr.nunique(),
+            narr.nunique() / total, (narr.str.len() < 5).sum() / total
+        ])
 
-        balance_ratios = np.where(
-            customer_df["closingBalance"] > 0,
-            transaction_amounts / customer_df["closingBalance"],
-            0,
-        )
-        features.extend(
-            [balance_ratios.mean(), balance_ratios.max(), balance_ratios.std()]
-        )
+        # Balance behavior
+        balance = group["closingBalance"]
+        bal_ratio = np.where(balance > 0, txn_amt / balance, 0)
+        features.extend([
+            np.mean(bal_ratio), np.max(bal_ratio),
+            np.std(bal_ratio) if n_txns > 1 else 0.0
+        ])
 
-        high_amount_transactions = (
-            np.abs(transaction_amounts) > transaction_amounts.quantile(0.9)
-        ).sum() / total_transactions
-        rapid_transactions = (
-            (time_diffs < 1).sum() / max(total_transactions - 1, 1)
-            if total_transactions > 1
-            else 0
-        )
-        features.extend([high_amount_transactions, rapid_transactions])
-
-        customer_features.append(features)
-
-    return np.array(customer_features)
+        # Risk indicators
+        high_thresh = txn_amt.quantile(0.9) if n_txns > 0 else 0
+        features.append((np.abs(txn_amt) > high_thresh).sum() / total)
+        features.append(((group["credit"] % 1000 == 0) | (group["debit"] % 1000 == 0)).sum() / total)
+        
+        # Activity metrics
+        lifetime = (group["date"].max() - group["date"].min()).days
+        features.extend([lifetime, n_txns / max(lifetime, 1)])
+        
+        customer_features.append([float(x) if pd.notna(x) else 0.0 for x in features])
+    
+    return np.array(customer_features, dtype=np.float32)

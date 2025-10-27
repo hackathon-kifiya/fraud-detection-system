@@ -33,27 +33,31 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60  # seconds
 
-    # Model Configuration
+    # Model Configuration - Unsupervised Models
     DATA_DIR: str = "data"
-    KYC_MODEL_PATH: str = "data/models/kyc_model.pkl"
-    TRANSACTION_MODEL_PATH: str = "data/models/transaction_model.pkl"
-    KYC_SCALER_PATH: str = "data/models/kyc_scaler.pkl"
-    TRANSACTION_SCALER_PATH: str = "data/models/transaction_scaler.pkl"
+    UNSUPERVISED_MODELS_DIR: str = "data/models/unsupervised"
+    CUSTOMER_MODEL_PATH: str = "data/models/unsupervised/customer_model.pkl"
+    CUSTOMER_SCALER_PATH: str = "data/models/unsupervised/customer_scaler.pkl"
+    TRANSACTION_MODEL_PATH: str = "data/models/unsupervised/transaction_model.pkl"
+    TRANSACTION_SCALER_PATH: str = "data/models/unsupervised/transaction_scaler.pkl"
+    COMBINED_MODEL_PATH: str = "data/models/unsupervised/merged_model.pkl"
+    COMBINED_SCALER_PATH: str = "data/models/unsupervised/merged_scaler.pkl"
+    # Legacy aliases for backward compatibility
+    KYC_MODEL_PATH: str = "data/models/unsupervised/customer_model.pkl"
+    KYC_SCALER_PATH: str = "data/models/unsupervised/customer_scaler.pkl"
     MODELS_DIR: str = "data/models"
-    COMBINED_MODEL_PATH: str = "data/models/merged_model.pkl"
-    COMBINED_SCALER_PATH: str = "data/models/merged_scaler.pkl"
-    CUSTOMER_MODEL_PATH: str = "data/models/customer_model.pkl"
-    CUSTOMER_SCALER_PATH: str = "data/models/customer_scaler.pkl"
 
     # Supervised Models (Random Forest)
-    KYC_SUPERVISED_MODEL_PATH: str = "data/models/kyc_supervised_model.pkl"
-    KYC_SUPERVISED_SCALER_PATH: str = "data/models/kyc_supervised_scaler.pkl"
-    TRANSACTION_SUPERVISED_MODEL_PATH: str = "data/models/transaction_supervised_model.pkl"
-    TRANSACTION_SUPERVISED_SCALER_PATH: str = "data/models/transaction_supervised_scaler.pkl"
-    COMBINED_SUPERVISED_MODEL_PATH: str = "data/models/merged_supervised_model.pkl"
-    COMBINED_SUPERVISED_SCALER_PATH: str = "data/models/merged_supervised_scaler.pkl"
-    CUSTOMER_SUPERVISED_MODEL_PATH: str = "data/models/customer_supervised_model.pkl"
-    CUSTOMER_SUPERVISED_SCALER_PATH: str = "data/models/customer_supervised_scaler.pkl"
+    SUPERVISED_MODELS_DIR: str = "data/models/supervised"
+    CUSTOMER_SUPERVISED_MODEL_PATH: str = "data/models/supervised/customer_rf_model.pkl"
+    CUSTOMER_SUPERVISED_SCALER_PATH: str = "data/models/supervised/customer_rf_scaler.pkl"
+    TRANSACTION_SUPERVISED_MODEL_PATH: str = "data/models/supervised/transaction_rf_model.pkl"
+    TRANSACTION_SUPERVISED_SCALER_PATH: str = "data/models/supervised/transaction_rf_scaler.pkl"
+    COMBINED_SUPERVISED_MODEL_PATH: str = "data/models/supervised/merged_rf_model.pkl"
+    COMBINED_SUPERVISED_SCALER_PATH: str = "data/models/supervised/merged_rf_scaler.pkl"
+    # Legacy aliases for backward compatibility
+    KYC_SUPERVISED_MODEL_PATH: str = "data/models/supervised/customer_rf_model.pkl"
+    KYC_SUPERVISED_SCALER_PATH: str = "data/models/supervised/customer_rf_scaler.pkl"
 
     # Isolation Forest Parameters
     CONTAMINATION: float = 0.1
