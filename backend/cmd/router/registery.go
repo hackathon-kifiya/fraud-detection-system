@@ -20,23 +20,28 @@ func Init(cfg *RouterConfig) *gin.Engine {
 	// Parse allowed origins from config
 	var allowOrigins []string
 	if cfg != nil && cfg.AllowedOrigins != "" {
-		// Split by comma and clean up whitespace
-		origins := strings.Split(cfg.AllowedOrigins, ",")
-		for _, origin := range origins {
-			allowOrigins = append(allowOrigins, strings.TrimSpace(origin))
+		// Check if "*" is specified to allow all origins
+		if strings.TrimSpace(cfg.AllowedOrigins) == "*" {
+			allowOrigins = []string{"*"}
+		} else {
+			// Split by comma and clean up whitespace
+			origins := strings.Split(cfg.AllowedOrigins, ",")
+			for _, origin := range origins {
+				allowOrigins = append(allowOrigins, strings.TrimSpace(origin))
+			}
 		}
 	}
 
-	// Default origins if none provided
+	// Allow all origins by default
 	if len(allowOrigins) == 0 {
-		allowOrigins = []string{"http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"}
+		allowOrigins = []string{"*"}
 	}
 
 	// Configure CORS
 	config := cors.Config{
 		AllowOrigins:     allowOrigins,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", "X-API-Key"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,

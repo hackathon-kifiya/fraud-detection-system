@@ -26,7 +26,7 @@ alembic
 
 # Utilities
 python-dotenv
-pyyaml
+pyyaml>=6.0
 
 # HTTP Client
 httpx
@@ -34,3 +34,6 @@ aiohttp
 
 # Data Validation
 email-validator
+
+# JWT
+pyjwt
