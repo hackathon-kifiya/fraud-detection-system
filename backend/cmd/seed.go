@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/repository"
@@ -23,7 +24,7 @@ func seedDatabase(db *gorm.DB) error {
 		Role:      domain.RoleAdmin,
 	}
 
-	_, err := userService.Register(nil, adminUser)
+	_, err := userService.Register(context.TODO(), adminUser)
 	if err != nil && err != service.ErrUserExists {
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}
@@ -37,7 +38,7 @@ func seedDatabase(db *gorm.DB) error {
 		Role:      domain.RoleAnalyst,
 	}
 
-	_, err = userService.Register(nil, analystUser)
+	_, err = userService.Register(context.TODO(), analystUser)
 	if err != nil && err != service.ErrUserExists {
 		return fmt.Errorf("failed to create analyst user: %w", err)
 	}
@@ -51,10 +52,15 @@ func seedDatabase(db *gorm.DB) error {
 		Role:      domain.RoleViewer,
 	}
 
-	_, err = userService.Register(nil, viewerUser)
+	_, err = userService.Register(context.TODO(), viewerUser)
 	if err != nil && err != service.ErrUserExists {
 		return fmt.Errorf("failed to create viewer user: %w", err)
 	}
+
+	// Data types are managed by the Data Management Service
+	// They are seeded automatically when the Data Management Service starts
+	fmt.Println("Data types are managed by the Data Management Service")
+	fmt.Println("Please ensure the Data Management Service is running to have data types available")
 
 	return nil
 }

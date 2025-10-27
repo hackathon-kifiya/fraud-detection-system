@@ -1,8 +1,10 @@
 package com.frauddetection.domain;
 
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
@@ -15,83 +17,97 @@ import java.util.ArrayList;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class DynamicFact {
     private String entityId;
     private String dataType;
+    @Builder.Default
     private Map<String, Object> properties = new HashMap<>();
+    @Builder.Default
     private List<Violation> violations = new ArrayList<>();
-
+    @Builder.Default
+    private double riskScore = 0.0;
+    
+    // Constructor for convenience when creating without builder
     public DynamicFact(String entityId, String dataType) {
         this.entityId = entityId;
         this.dataType = dataType;
         this.properties = new HashMap<>();
         this.violations = new ArrayList<>();
     }
-
-    // Convenience methods for property access
+    
+    // Method to set a property dynamically
     public void setProperty(String key, Object value) {
-        this.properties.put(key, value);
-    }
-
-    public Object getProperty(String key) {
-        return this.properties.get(key);
-    }
-
-    public String getStringProperty(String key) {
-        Object value = getProperty(key);
-        return value != null ? value.toString() : null;
-    }
-
-    public Double getDoubleProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
+        if (properties == null) {
+            properties = new HashMap<>();
         }
-        return null;
+        properties.put(key, value);
     }
-
-    public Integer getIntProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        return null;
+    
+    // Method to set risk score
+    public void setRiskScore(double score) {
+        this.riskScore = score;
     }
-
-    public Boolean getBooleanProperty(String key) {
-        Object value = getProperty(key);
-        if (value instanceof Boolean) {
-            return (Boolean) value;
-        }
-        return null;
+    
+    // Method to get risk score
+    public double getRiskScore() {
+        return this.riskScore;
     }
-
-    // Violation management
-    public void addViolation(String code, int weight, String description) {
-        this.violations.add(new Violation(code, weight, description));
-    }
-
-    public boolean hasViolations() {
-        return !violations.isEmpty();
-    }
-
-    public int getViolationCount() {
-        return violations.size();
-    }
-
+    
+    // Method to get total risk score from violations
     public double getTotalRiskScore() {
-        return violations.stream()
-                .mapToDouble(Violation::getWeight)
+        if (violations == null || violations.isEmpty()) {
+            return riskScore;
+        }
+        return riskScore + violations.stream()
+                .mapToInt(Violation::getWeight)
                 .sum();
     }
-
-    @Override
-    public String toString() {
-        return "DynamicFact{" +
-                "entityId='" + entityId + '\'' +
-                ", dataType='" + dataType + '\'' +
-                ", properties=" + properties +
-                ", violationsCount=" + violations.size() +
-                '}';
+    
+    // Method to add a violation
+    public void addViolation(String code, String description) {
+        if (violations == null) {
+            violations = new ArrayList<>();
+        }
+        violations.add(Violation.builder()
+                .code(code)
+                .description(description)
+                .weight(1) // default weight
+                .build());
+    }
+    
+    // Method to add a violation with weight
+    public void addViolation(String code, String description, int weight) {
+        if (violations == null) {
+            violations = new ArrayList<>();
+        }
+        violations.add(Violation.builder()
+                .code(code)
+                .description(description)
+                .weight(weight)
+                .build());
+    }
+    
+    // Helper method to get a property as a Number for DRL rules
+    public Number getPropertyAsNumber(String key) {
+        Object value = properties.get(key);
+        if (value instanceof Number) {
+            return (Number) value;
+        }
+        return 0.0;
+    }
+    
+    // Helper method to get a property as a String for DRL rules
+    public String getPropertyAsString(String key) {
+        Object value = properties.get(key);
+        if (value != null) {
+            return value.toString();
+        }
+        return "";
+    }
+    
+    // Helper method to check if a property exists
+    public boolean hasProperty(String key) {
+        return properties != null && properties.containsKey(key);
     }
 }

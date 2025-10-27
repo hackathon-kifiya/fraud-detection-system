@@ -52,6 +52,7 @@ import RuleVersionHistoryDialog from "./RuleVersionHistoryDialog";
 const RuleManagementPage = ({ onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [rules, setRules] = useState([]);
+  const [dataTypes, setDataTypes] = useState([]);
   const [filters, setFilters] = useState({
     dataType: "",
     status: "",
@@ -62,6 +63,19 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
   const [testPanelOpen, setTestPanelOpen] = useState(false);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
+
+  // Load data types on component mount
+  useEffect(() => {
+    const loadDataTypes = async () => {
+      try {
+        const response = await ruleEngineAPI.getAllDataTypes();
+        setDataTypes(response.data || []);
+      } catch (error) {
+        console.error("Failed to load data types:", error);
+      }
+    };
+    loadDataTypes();
+  }, []);
 
   // Load rules on component mount
   useEffect(() => {
@@ -78,7 +92,8 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
         status: filters.status || undefined,
         search: filters.search || undefined,
       });
-      setRules(response.data.rules || []);
+      // The API returns {content: [...], totalElements: n}
+      setRules(response.data.content || []);
     } catch (error) {
       onShowSnackbar("Failed to load rules: " + error.message, "error");
     } finally {
@@ -169,8 +184,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
     switch (status) {
       case "ACTIVE":
         return "success";
-      case "DRAFT":
-        return "warning";
       case "INACTIVE":
         return "error";
       default:
@@ -182,8 +195,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
     switch (status) {
       case "ACTIVE":
         return <ActiveIcon />;
-      case "DRAFT":
-        return <EditIcon />;
       case "INACTIVE":
         return <InactiveIcon />;
       default:
@@ -285,16 +296,16 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
           <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <EditIcon sx={{ fontSize: 24, color: "#ff9800", mr: 1 }} />
+                <InactiveIcon sx={{ fontSize: 24, color: "#f44336", mr: 1 }} />
                 <Typography variant='h6' sx={{ fontWeight: "bold" }}>
-                  Draft Rules
+                  Inactive Rules
                 </Typography>
               </Box>
               <Typography
                 variant='h4'
-                sx={{ fontWeight: "bold", color: "#ff9800" }}
+                sx={{ fontWeight: "bold", color: "#f44336" }}
               >
-                {rules.filter((r) => r.status === "DRAFT").length}
+                {rules.filter((r) => r.status === "INACTIVE").length}
               </Typography>
             </CardContent>
           </Card>
@@ -337,11 +348,11 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
               label='Data Type'
             >
               <MenuItem value=''>All Types</MenuItem>
-              <MenuItem value='TRANSACTION'>Transaction</MenuItem>
-              <MenuItem value='KYC'>KYC</MenuItem>
-              <MenuItem value='LOAN'>Loan</MenuItem>
-              <MenuItem value='CREDIT'>Credit</MenuItem>
-              <MenuItem value='REPAYMENT'>Repayment</MenuItem>
+              {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
+                <MenuItem key={dt.id} value={dt.dataType}>
+                  {dt.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -354,7 +365,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
             >
               <MenuItem value=''>All Status</MenuItem>
               <MenuItem value='ACTIVE'>Active</MenuItem>
-              <MenuItem value='DRAFT'>Draft</MenuItem>
               <MenuItem value='INACTIVE'>Inactive</MenuItem>
             </Select>
           </FormControl>

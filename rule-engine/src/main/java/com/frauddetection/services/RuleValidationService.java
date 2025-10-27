@@ -1,17 +1,16 @@
 package com.frauddetection.services;
 
-import com.frauddetection.domain.Rule;
-import com.frauddetection.domain.DynamicFact;
+import com.frauddetection.domain.ValidationResult;
+import com.frauddetection.client.DataManagementClient;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
 import org.kie.api.builder.Message;
 import org.kie.api.builder.Results;
-import org.kie.api.runtime.KieContainer;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,29 +18,33 @@ import java.util.regex.Pattern;
 public class RuleValidationService {
 
     private static final String PACKAGE_PATTERN = "package\\s+rules\\s*;";
-    private static final Pattern CLASS_REFERENCE_PATTERN = Pattern.compile("\\bDynamicFact\\b");
+
+    @Autowired
+    private DataManagementClient dataManagementClient;
 
     public ValidationResult validateDrl(String drlContent, String dataType) {
         ValidationResult result = new ValidationResult();
         
-        // 1. Basic syntax validation
-        if (!validateSyntax(drlContent, result)) {
-            return result;
-        }
-        
-        // 2. Package validation
+        // 1. Package validation (check first before syntax validation)
         if (!validatePackage(drlContent, result)) {
             return result;
         }
         
-        // 3. Domain class validation
+        // 2. Domain class validation (check before syntax validation)
         if (!validateDomainClasses(drlContent, dataType, result)) {
             return result;
         }
         
-        // 4. Semantic validation with test data
-        if (!validateSemantics(drlContent, dataType, result)) {
+        // 3. Basic syntax validation (use Drools compiler)
+        if (!validateSyntax(drlContent, result)) {
             return result;
+        }
+        
+        // 4. Semantic validation - validate field names against schema
+        if (dataType != null && !dataType.trim().isEmpty()) {
+            if (!validateSemantics(drlContent, dataType, result)) {
+                return result;
+            }
         }
         
         result.setValid(true);
@@ -49,6 +52,7 @@ public class RuleValidationService {
     }
 
     private boolean validateSyntax(String drlContent, ValidationResult result) {
+        List<String> errors = new ArrayList<>();
         try {
             KieServices kieServices = KieServices.Factory.get();
             KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
@@ -60,140 +64,134 @@ public class RuleValidationService {
             Results results = kieBuilder.getResults();
             if (results.hasMessages(Message.Level.ERROR)) {
                 for (Message message : results.getMessages(Message.Level.ERROR)) {
-                    result.addError("Syntax Error: " + message.getText());
+                    errors.add("Syntax Error: " + message.getText());
                 }
+                result.setErrors(errors);
                 return false;
             }
-            
+            // No syntax errors, don't modify existing errors
             return true;
         } catch (Exception e) {
-            result.addError("Syntax validation failed: " + e.getMessage());
+            errors.add("Syntax validation failed: " + e.getMessage());
+            result.setErrors(errors);
             return false;
         }
     }
 
     private boolean validatePackage(String drlContent, ValidationResult result) {
         Pattern packagePattern = Pattern.compile(PACKAGE_PATTERN);
+        List<String> errors = new ArrayList<>();
         if (!packagePattern.matcher(drlContent).find()) {
-            result.addError("DRL must contain 'package rules;' declaration");
+            errors.add("DRL must contain 'package rules;' declaration");
+            result.setErrors(errors);
             return false;
         }
         return true;
     }
 
     private boolean validateDomainClasses(String drlContent, String dataType, ValidationResult result) {
-        // For dynamic facts, we expect DynamicFact class references
+        List<String> errors = new ArrayList<>();
         if (!drlContent.contains("DynamicFact")) {
-            result.addError("DRL must reference DynamicFact class for dynamic data evaluation");
+            errors.add("DRL must reference DynamicFact class for dynamic data evaluation");
+            result.setErrors(errors);
             return false;
         }
         
         // Check for proper package import
         if (!drlContent.contains("import com.frauddetection.domain.DynamicFact")) {
-            result.addError("DRL must import com.frauddetection.domain.DynamicFact");
+            errors.add("DRL must import com.frauddetection.domain.DynamicFact");
+            result.setErrors(errors);
             return false;
         }
         
         return true;
     }
 
-    private boolean isValidClassForDataType(String className, String dataType) {
-        // For dynamic facts, only DynamicFact is valid
-        return "DynamicFact".equals(className);
-    }
-
+    /**
+     * Validates semantic aspects of the DRL against the data type schema.
+     * Fetches schema from data-management-service and validates field names.
+     */
     private boolean validateSemantics(String drlContent, String dataType, ValidationResult result) {
+        List<String> errors = new ArrayList<>();
+        
         try {
-            // Create test data based on data type
-            Object testData = createTestData(dataType);
-            if (testData == null) {
-                result.addError("Could not create test data for validation");
-                return false;
+            // Fetch schema from data-management-service
+            Map<String, Object> schemaMap = dataManagementClient.getDataTypeSchema(dataType);
+            
+            if (schemaMap == null || !schemaMap.containsKey("fields")) {
+                return true; // No schema defined or no fields, skip semantic validation
             }
             
-            // Compile and test the rule
-            KieServices kieServices = KieServices.Factory.get();
-            KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-            kieFileSystem.write("src/main/resources/rules/semantic_test.drl", drlContent);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> fields = (Map<String, Object>) schemaMap.get("fields");
+            if (fields == null || fields.isEmpty()) {
+                return true;
+            }
             
-            KieBuilder kieBuilder = kieServices.newKieBuilder(kieFileSystem);
-            kieBuilder.buildAll();
+            // Extract field names from DRL
+            Set<String> referencedFields = extractFieldReferences(drlContent);
             
-            Results results = kieBuilder.getResults();
-            if (results.hasMessages(Message.Level.ERROR)) {
-                for (Message message : results.getMessages(Message.Level.ERROR)) {
-                    result.addError("Semantic Error: " + message.getText());
+            // Validate referenced fields exist in schema
+            for (String field : referencedFields) {
+                if (!fields.containsKey(field)) {
+                    errors.add(String.format(
+                        "Field '%s' is referenced in the rule but is not defined in the data type schema for '%s'. Available fields: %s",
+                        field, dataType, fields.keySet()
+                    ));
                 }
-                return false;
             }
             
-            // Test execution with sample data
-            KieContainer kieContainer = kieServices.newKieContainer(kieBuilder.getKieModule().getReleaseId());
-            kieContainer.newStatelessKieSession().execute(testData);
+            if (!errors.isEmpty()) {
+                result.setErrors(errors);
+                return false;
+            }
             
             return true;
         } catch (Exception e) {
-            result.addError("Semantic validation failed: " + e.getMessage());
+            errors.add("Semantic validation failed: " + e.getMessage());
+            result.setErrors(errors);
             return false;
         }
     }
-
-    private Object createTestData(String dataType) {
-        DynamicFact fact = new DynamicFact("test-entity", dataType.toLowerCase());
+    
+    /**
+     * Extracts field references from DRL content.
+     * Looks for patterns like:
+     * - properties["fieldName"] or properties['fieldName']
+     * - getPropertyAsNumber("fieldName")
+     * - getPropertyAsString("fieldName")
+     * - hasProperty("fieldName")
+     */
+    private Set<String> extractFieldReferences(String drlContent) {
+        Set<String> fields = new HashSet<>();
         
-        // Create generic test data based on common patterns
-        switch (dataType.toLowerCase()) {
-            case "transaction":
-                fact.setProperty("amount", 1000.0);
-                fact.setProperty("accountBalance", 500.0);
-                fact.setProperty("type", "debit");
-                fact.setProperty("paymentMethod", "card");
-                break;
-            case "kyc":
-                fact.setProperty("verifiedStatus", false);
-                fact.setProperty("verificationDate", "2023-01-01");
-                break;
-            case "loan":
-                fact.setProperty("amount", 60000.0);
-                fact.setProperty("term", 36);
-                fact.setProperty("interestRate", 5.5);
-                break;
-            case "credit":
-                fact.setProperty("score", 650);
-                fact.setProperty("historyLength", 24);
-                fact.setProperty("delinquencies", 0);
-                break;
-            case "repayment":
-                fact.setProperty("amount", 500.0);
-                fact.setProperty("dueDate", "2023-12-01");
-                fact.setProperty("isLate", false);
-                break;
-            default:
-                // For custom data types, create generic test data
-                fact.setProperty("amount", 100.0);
-                fact.setProperty("status", "active");
-                fact.setProperty("timestamp", java.time.Instant.now());
-                break;
+        // Pattern 1: properties["fieldName"] or properties['fieldName']
+        Pattern pattern1 = Pattern.compile(
+            "properties\\s*\\[\"([^\"]+)\"\\]|properties\\s*\\['([^']+)'\\]"
+        );
+        
+        Matcher matcher1 = pattern1.matcher(drlContent);
+        while (matcher1.find()) {
+            String field = matcher1.group(1) != null ? matcher1.group(1) : matcher1.group(2);
+            if (field != null && !field.isEmpty()) {
+                fields.add(field);
+            }
         }
         
-        return fact;
+        // Pattern 2: getPropertyAsNumber("fieldName"), getPropertyAsString("fieldName"), hasProperty("fieldName")
+        Pattern pattern2 = Pattern.compile(
+            "(?:getPropertyAsNumber|getPropertyAsString|hasProperty)\\s*\\(\"([^\"]+)\"\\s*\\)"
+        );
+        
+        Matcher matcher2 = pattern2.matcher(drlContent);
+        while (matcher2.find()) {
+            String field = matcher2.group(1);
+            if (field != null && !field.isEmpty()) {
+                fields.add(field);
+            }
+        }
+        
+        return fields;
     }
 
-    public static class ValidationResult {
-        private boolean valid = false;
-        private List<String> errors = new ArrayList<>();
-        private List<String> warnings = new ArrayList<>();
-
-        public boolean isValid() { return valid; }
-        public void setValid(boolean valid) { this.valid = valid; }
-
-        public List<String> getErrors() { return errors; }
-        public void addError(String error) { this.errors.add(error); }
-
-        public List<String> getWarnings() { return warnings; }
-        public void addWarning(String warning) { this.warnings.add(warning); }
-
-        public boolean hasErrors() { return !errors.isEmpty(); }
-        public boolean hasWarnings() { return !warnings.isEmpty(); }
-    }
 }

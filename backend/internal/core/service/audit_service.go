@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,15 +15,19 @@ type AuditService struct {
 	auditNoteRepo      port.AuditNoteRepository
 	auditLogRepo       port.AuditLogRepository
 	caseAssignmentRepo port.CaseAssignmentRepository
+	labeledDataRepo    port.LabeledDataRepository
+	callbackRepo       port.CallbackRepository
 }
 
 // NewAuditService creates a new audit service
-func NewAuditService(flaggedItemRepo port.FlaggedItemRepository, auditNoteRepo port.AuditNoteRepository, auditLogRepo port.AuditLogRepository, caseAssignmentRepo port.CaseAssignmentRepository) *AuditService {
+func NewAuditService(flaggedItemRepo port.FlaggedItemRepository, auditNoteRepo port.AuditNoteRepository, auditLogRepo port.AuditLogRepository, caseAssignmentRepo port.CaseAssignmentRepository, labeledDataRepo port.LabeledDataRepository, callbackRepo port.CallbackRepository) *AuditService {
 	return &AuditService{
 		flaggedItemRepo:    flaggedItemRepo,
 		auditNoteRepo:      auditNoteRepo,
 		auditLogRepo:       auditLogRepo,
 		caseAssignmentRepo: caseAssignmentRepo,
+		labeledDataRepo:    labeledDataRepo,
+		callbackRepo:       callbackRepo,
 	}
 }
 
@@ -52,21 +57,23 @@ func (s *AuditService) GetFlaggedItemDetail(ctx context.Context, id string) (*do
 		return nil, fmt.Errorf("failed to get audit trail: %w", err)
 	}
 
-	// Parse score breakdown from details field
-	// TODO: Implement proper JSON parsing of details field to extract individual scores
-	// For now, we'll use the risk score as a placeholder
-	ruleEngineScore := item.RuleEngineScore
-	mlScore := item.MLScore
-	anomalyScore := item.AnomalyScore
+	// Parse decision breakdown if available
+	var breakdown *domain.DecisionBreakdown
+	if item.DecisionBreakdown != "" {
+		var b domain.DecisionBreakdown
+		if err := json.Unmarshal([]byte(item.DecisionBreakdown), &b); err == nil {
+			breakdown = &b
+		}
+	}
 
+	// Get scores - they are already in the embedded FlaggedItem
+	// The embedded fields will be flattened in JSON response
 	detail := &domain.FlaggedItemDetail{
-		FlaggedItem:     *item,
-		OriginalData:    originalData,
-		RuleEngineScore: ruleEngineScore,
-		MLScore:         mlScore,
-		AnomalyScore:    anomalyScore,
-		AuditNotes:      notes,
-		AuditTrail:      auditTrail,
+		FlaggedItem:  *item,
+		OriginalData: originalData,
+		Breakdown:    breakdown,
+		AuditNotes:   notes,
+		AuditTrail:   auditTrail,
 	}
 
 	return detail, nil
@@ -110,7 +117,60 @@ func (s *AuditService) ClassifyFlaggedItem(ctx context.Context, id, classificati
 		fmt.Printf("Warning: failed to create audit log: %v\n", err)
 	}
 
+	// Store labeled data for retraining
+	s.storeLabeledDataAsync(ctx, item, classification, userID)
+
+	// Invoke callback with decision
+	s.invokeCallbackForDecision(ctx, item, classification)
+
 	return nil
+}
+
+// storeLabeledDataAsync stores labeled data asynchronously for retraining
+func (s *AuditService) storeLabeledDataAsync(ctx context.Context, item *domain.FlaggedItem, decision, labeledBy string) {
+	go func() {
+		// Get original facts from details or construct from item
+		facts := map[string]interface{}{
+			"data_id": item.DataID,
+			"type":    item.Type,
+		}
+
+		labeledData := &domain.LabeledData{
+			EntityID:      item.DataID,
+			DataType:      item.Type,
+			Facts:         facts,
+			Decision:      decision,
+			LabeledBy:     labeledBy,
+			FlaggedItemID: item.ID,
+		}
+
+		if err := s.labeledDataRepo.Create(ctx, labeledData); err != nil {
+			fmt.Printf("Warning: failed to store labeled data: %v\n", err)
+		}
+	}()
+}
+
+// invokeCallbackForDecision invokes callbacks with the final decision
+func (s *AuditService) invokeCallbackForDecision(ctx context.Context, item *domain.FlaggedItem, decision string) {
+	go func() {
+		payload := map[string]interface{}{
+			"entity_id":       item.DataID,
+			"data_type":       item.Type,
+			"flagged_item_id": item.ID,
+			"decision":        decision,
+			"decision_details": map[string]interface{}{
+				"rule_engine_score": item.RuleEngineScore,
+				"anomaly_score":     item.AnomalyScore,
+				"ml_score":          item.MLScore,
+				"risk_score":        item.RiskScore,
+			},
+			"timestamp": time.Now().Format(time.RFC3339),
+		}
+
+		if err := s.callbackRepo.SendCallback(ctx, item.Type, payload); err != nil {
+			fmt.Printf("Warning: failed to send callback for classification: %v\n", err)
+		}
+	}()
 }
 
 // AddAuditNote adds a contextual note to a flagged item
@@ -274,7 +334,7 @@ func (s *AuditService) ListFlaggedItemsForReview(ctx context.Context, req domain
 
 // GetMyAssignments retrieves assignments for the logged-in auditor
 func (s *AuditService) GetMyAssignments(ctx context.Context, auditorID string, limit, offset int, status string) ([]domain.CaseAssignment, int64, error) {
-	return s.caseAssignmentRepo.GetByAuditorID(ctx, auditorID, limit, offset)
+	return s.caseAssignmentRepo.GetByAuditorID(ctx, auditorID, limit, offset, status)
 }
 
 // GetAssignmentDetail retrieves assignment details for an auditor

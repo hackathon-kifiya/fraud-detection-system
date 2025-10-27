@@ -32,82 +32,12 @@ import {
 import { Editor } from "@monaco-editor/react";
 import { ruleEngineAPI } from "../services/api";
 
-const DRL_TEMPLATES = {
-  TRANSACTION: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "High Amount Transaction"
-when
-    $f: DynamicFact(
-        dataType == "transaction",
-        getDoubleProperty("amount") > 10000
-    )
-then
-    $f.addViolation("TXN_HIGH_AMOUNT", 20, "Transaction amount exceeds threshold");
-end`,
-
-  KYC: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Unverified KYC"
-when
-    $f: DynamicFact(
-        dataType == "kyc",
-        getBooleanProperty("verifiedStatus") == false
-    )
-then
-    $f.addViolation("KYC_UNVERIFIED", 15, "User is not KYC verified");
-end`,
-
-  LOAN: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "High Risk Loan"
-when
-    $f: DynamicFact(
-        dataType == "loan",
-        getDoubleProperty("amount") > 50000
-    )
-then
-    $f.addViolation("LOAN_HIGH_AMOUNT", 25, "Loan amount exceeds high risk threshold");
-end`,
-
-  CREDIT: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Low Credit Score"
-when
-    $f: DynamicFact(
-        dataType == "credit",
-        getIntProperty("score") < 600
-    )
-then
-    $f.addViolation("CREDIT_LOW_SCORE", 30, "Credit score below acceptable threshold");
-end`,
-
-  REPAYMENT: `package rules;
-
-import com.frauddetection.domain.DynamicFact;
-
-rule "Late Repayment"
-when
-    $f: DynamicFact(
-        dataType == "repayment",
-        getBooleanProperty("isLate") == true
-    )
-then
-    $f.addViolation("REPAYMENT_LATE", 25, "Repayment is late");
-end`,
-};
-
 const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
+  const [dataTypes, setDataTypes] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -116,6 +46,27 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
     drlContent: "",
     changeDescription: "",
   });
+
+  useEffect(() => {
+    const loadDataTypes = async () => {
+      try {
+        const response = await ruleEngineAPI.getAllDataTypes();
+        const types = response.data || [];
+        setDataTypes(types);
+        if (types.length > 0 && !rule) {
+          const firstType = types[0].dataType || "TRANSACTION";
+          setFormData(prev => ({
+            ...prev,
+            dataType: firstType,
+            drlContent: "",
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to load data types:", error);
+      }
+    };
+    loadDataTypes();
+  }, []);
 
   useEffect(() => {
     if (rule) {
@@ -128,34 +79,42 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
         changeDescription: "",
       });
     } else {
+      const defaultType = dataTypes.length > 0 ? dataTypes[0].name : "TRANSACTION";
       setFormData({
         name: "",
         description: "",
-        dataType: "TRANSACTION",
+        dataType: defaultType,
         status: "DRAFT",
-        drlContent: DRL_TEMPLATES.TRANSACTION,
+        drlContent: "",
         changeDescription: "",
       });
     }
     setValidationResult(null);
-  }, [rule, open]);
+  }, [rule, open, dataTypes]);
 
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-    if (field === "dataType" && !rule) {
-      setFormData({
-        ...formData,
-        [field]: value,
-        drlContent: DRL_TEMPLATES[value] || "",
-      });
-    }
   };
 
-  const handleLoadTemplate = () => {
-    setFormData({
-      ...formData,
-      drlContent: DRL_TEMPLATES[formData.dataType] || "",
-    });
+  const handleLoadTemplate = async () => {
+    try {
+      setLoadingTemplate(true);
+      // Fetch template from API (no data type dependency)
+      const response = await ruleEngineAPI.getTemplate();
+      
+      // Update the drlContent from API response
+      const templateContent = response.data?.drlContent || "";
+      setFormData(prev => ({
+        ...prev,
+        drlContent: templateContent,
+      }));
+      onShowSnackbar("Template loaded successfully", "success");
+      setLoadingTemplate(false);
+    } catch (error) {
+      console.error("Error loading template:", error);
+      onShowSnackbar("Failed to load template: " + error.message, "error");
+      setLoadingTemplate(false);
+    }
   };
 
   const handleValidate = async () => {
@@ -191,6 +150,11 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
   const handleSave = async (activate = false) => {
     if (!formData.name.trim()) {
       onShowSnackbar("Rule name is required", "error");
+      return;
+    }
+
+    if (!formData.dataType || !formData.dataType.trim()) {
+      onShowSnackbar("Data type is required", "error");
       return;
     }
 
@@ -288,7 +252,7 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
+                <FormControl fullWidth required>
                   <InputLabel>Data Type</InputLabel>
                   <Select
                     value={formData.dataType}
@@ -296,12 +260,13 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                       handleInputChange("dataType", e.target.value)
                     }
                     label='Data Type'
+                    required
                   >
-                    <MenuItem value='TRANSACTION'>Transaction</MenuItem>
-                    <MenuItem value='KYC'>KYC</MenuItem>
-                    <MenuItem value='LOAN'>Loan</MenuItem>
-                    <MenuItem value='CREDIT'>Credit</MenuItem>
-                    <MenuItem value='REPAYMENT'>Repayment</MenuItem>
+                    {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
+                      <MenuItem key={dt.id} value={dt.dataType}>
+                        {dt.name}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
@@ -351,14 +316,17 @@ const RuleEditorDialog = ({ open, rule, onClose, onSave, onShowSnackbar }) => {
                 DRL Content
               </Typography>
               <Box sx={{ display: "flex", gap: 1 }}>
-                <Button
-                  variant='outlined'
-                  startIcon={<CodeIcon />}
-                  onClick={handleLoadTemplate}
-                  size='small'
-                >
-                  Load Template
-                </Button>
+                <Tooltip title="Load template from API">
+                  <Button
+                    variant='outlined'
+                    startIcon={loadingTemplate ? <CircularProgress size={16} /> : <CodeIcon />}
+                    onClick={handleLoadTemplate}
+                    disabled={loadingTemplate}
+                    size='small'
+                  >
+                    Load Template
+                  </Button>
+                </Tooltip>
                 <Button
                   variant='outlined'
                   startIcon={

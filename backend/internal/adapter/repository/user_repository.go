@@ -66,20 +66,31 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// List retrieves all users with pagination
-func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*domain.User, error) {
+// List retrieves all users with pagination and optional role filter
+func (r *UserRepository) List(ctx context.Context, limit, offset int, role string) ([]*domain.User, int64, error) {
 	var users []*domain.User
-	result := r.db.WithContext(ctx).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&users)
+	var total int64
 
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to list users: %w", result.Error)
+	query := r.db.WithContext(ctx).Model(&domain.User{})
+
+	// Apply role filter if provided
+	if role != "" {
+		query = query.Where("role = ?", role)
 	}
 
-	return users, nil
+	// Get total count
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	// Get users with pagination
+	result := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&users)
+
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("failed to list users: %w", result.Error)
+	}
+
+	return users, total, nil
 }
 
 // Count returns the total number of users

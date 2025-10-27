@@ -23,8 +23,8 @@ type UserRepository interface {
 	// Delete deletes a user by ID
 	Delete(ctx context.Context, id string) error
 
-	// List retrieves all users with pagination
-	List(ctx context.Context, limit, offset int) ([]*domain.User, error)
+	// List retrieves all users with pagination and optional role filter
+	List(ctx context.Context, limit, offset int, role string) ([]*domain.User, int64, error)
 
 	// Count returns the total number of users
 	Count(ctx context.Context) (int64, error)

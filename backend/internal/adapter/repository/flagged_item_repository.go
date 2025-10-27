@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -93,6 +94,13 @@ func (r *FlaggedItemRepository) Delete(ctx context.Context, id string) error {
 
 // GetStats retrieves statistics about flagged items
 func (r *FlaggedItemRepository) GetStats(ctx context.Context) (*domain.FlaggedItemStats, error) {
+	// Default to hardcoded types for backwards compatibility
+	types := []string{domain.TypeTransactions, domain.TypeLoanRequests, domain.TypeCreditHistory, domain.TypeKYC, domain.TypeRepayments}
+	return r.GetStatsWithTypes(ctx, types)
+}
+
+// GetStatsWithTypes retrieves statistics about flagged items with dynamic data types
+func (r *FlaggedItemRepository) GetStatsWithTypes(ctx context.Context, dataTypes []string) (*domain.FlaggedItemStats, error) {
 	var stats domain.FlaggedItemStats
 
 	// Get total flagged count
@@ -110,9 +118,9 @@ func (r *FlaggedItemRepository) GetStats(ctx context.Context) (*domain.FlaggedIt
 		return nil, fmt.Errorf("failed to get confirmed fraud count: %w", err)
 	}
 
-	// Get false positives count
-	if err := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("status = ?", domain.StatusFalsePositive).Count(&stats.FalsePositives).Error; err != nil {
-		return nil, fmt.Errorf("failed to get false positives count: %w", err)
+	// Get verified safe count (false positives)
+	if err := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("status = ?", domain.StatusFalsePositive).Count(&stats.VerifiedSafe).Error; err != nil {
+		return nil, fmt.Errorf("failed to get verified safe count: %w", err)
 	}
 
 	// Get high risk count (risk score > 80)
@@ -120,11 +128,10 @@ func (r *FlaggedItemRepository) GetStats(ctx context.Context) (*domain.FlaggedIt
 		return nil, fmt.Errorf("failed to get high risk count: %w", err)
 	}
 
-	// Get flagged by type
+	// Get flagged by type dynamically
 	stats.FlaggedByType = make(map[string]int64)
-	types := []string{domain.TypeTransactions, domain.TypeLoanRequests, domain.TypeCreditHistory, domain.TypeKYC, domain.TypeRepayments}
 
-	for _, itemType := range types {
+	for _, itemType := range dataTypes {
 		var count int64
 		if err := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("type = ?", itemType).Count(&count).Error; err != nil {
 			return nil, fmt.Errorf("failed to get count for type %s: %w", itemType, err)
@@ -187,14 +194,22 @@ func (r *FlaggedItemRepository) GetWithOriginalData(ctx context.Context, id, ite
 		return nil, nil, err
 	}
 
-	// For now, we'll return the item with original data as nil
-	// In a real implementation, this would query the appropriate table based on itemType
-	// and use the DataID to fetch the original record
+	// Parse the details field which contains the original data
 	var originalData interface{}
+	if item.Details != "" {
+		// Try to parse the details as JSON
+		if err := json.Unmarshal([]byte(item.Details), &originalData); err != nil {
+			// If parsing fails, return details as a string
+			originalData = item.Details
+		}
+	}
 
-	// TODO: Implement actual data fetching based on itemType and DataID
-	// This would involve querying tables like transactions, loan_requests, etc.
-	// based on the itemType field and using the DataID to join
+	// In a real production system, this would query the actual data tables:
+	// - transactions table for type "transactions"
+	// - loan_requests table for type "loan_requests"
+	// - kyc table for type "kyc"
+	// - etc.
+	// For now, we return the details field which contains the structured data
 
 	return item, originalData, nil
 }

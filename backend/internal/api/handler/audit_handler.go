@@ -15,15 +15,15 @@ var auditService *service.AuditService
 func InitAuditHandler(svc *service.AuditService, r *gin.Engine) {
 	auditService = svc
 
+	// Public route for getting case details (no auth required for viewing)
+	r.GET("/api/audit/flagged-items/:id/detail", getFlaggedItemDetailHandler)
+
 	// Protected routes for auditors
 	protected := r.Group("/api/audit")
 	protected.Use(authMiddleware())
 	{
 		// List flagged items for review
 		protected.GET("/flagged-items", listFlaggedItemsForReviewHandler)
-
-		// Get detailed view of flagged item
-		protected.GET("/flagged-items/:id/detail", getFlaggedItemDetailHandler)
 
 		// Classify flagged item
 		protected.POST("/flagged-items/:id/classify", classifyFlaggedItemHandler)
@@ -91,7 +91,7 @@ func getFlaggedItemDetailHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"flagged_item_detail": detail})
+	c.JSON(http.StatusOK, detail)
 }
 
 // classifyFlaggedItemHandler handles classifying a flagged item

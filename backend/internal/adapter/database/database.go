@@ -49,6 +49,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&domain.CaseAssignment{},
 		&domain.PerformanceReport{},
 		&domain.KPIMetrics{},
+		&domain.Callback{},
+		&domain.LabeledData{},
 	)
 
 	if err != nil {

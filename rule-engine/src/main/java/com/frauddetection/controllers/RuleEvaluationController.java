@@ -1,135 +1,68 @@
-package main.java.com.frauddetection.controllers;
+package com.frauddetection.controllers;
 
-import com.frauddetection.domain.EvaluationRequest;
-import com.frauddetection.domain.EvaluationResponse;
+import com.frauddetection.domain.EvaluationQuery;
+import com.frauddetection.dto.EvaluationQueryRequestDto;
+import com.frauddetection.dto.EvaluationResponseDto;
+import com.frauddetection.mapper.EvaluateMapper;
+import com.frauddetection.mapper.EvaluateQueryMapper;
 import com.frauddetection.services.DynamicRuleExecutionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api/evaluate")
+@Tag(name = "Rule Evaluation", description = "Execute rules against transaction data to calculate risk scores")
 public class RuleEvaluationController {
 
     @Autowired
     private DynamicRuleExecutionService executionService;
 
-    @PostMapping("/transaction")
-    public ResponseEntity<Map<String, Object>> evaluateTransaction(@RequestBody Map<String, Object> request) {
-        try {
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest("transaction", facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "Transaction evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
-        }
-    }
+    @Autowired
+    private EvaluateMapper evaluateMapper;
 
-    @PostMapping("/kyc")
-    public ResponseEntity<Map<String, Object>> evaluateKYC(@RequestBody Map<String, Object> request) {
-        try {
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest("kyc", facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "KYC evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
-        }
-    }
+    @Autowired
+    private EvaluateQueryMapper evaluateQueryMapper;
 
-    @PostMapping("/loan")
-    public ResponseEntity<Map<String, Object>> evaluateLoan(@RequestBody Map<String, Object> request) {
-        try {
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest("loan", facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
+    @Operation(
+        summary = "Evaluate data against rules",
+        description = """
+            Evaluates transaction data against active rules for the specified data type.
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "Loan evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
-        }
-    }
-
-    @PostMapping("/credit")
-    public ResponseEntity<Map<String, Object>> evaluateCredit(@RequestBody Map<String, Object> request) {
-        try {
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest("credit", facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
+            Returns a risk score calculated from cumulative violation weights:
+            - **Score 0**: No risk detected
+            - **Score 1-3**: Low risk
+            - **Score 4-6**: Medium risk
+            - **Score 7-10**: High risk
+            - **Score 11+**: Critical risk
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "Credit evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
+            For multiple facts, returns the average risk score.
+            """,
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "Evaluation completed successfully",
+                content = @Content(schema = @Schema(implementation = EvaluationResponseDto.class))
+            ),
+            @ApiResponse(
+                responseCode = "400",
+                description = "Invalid request or data type not found"
+            ),
+            @ApiResponse(
+                responseCode = "500",
+                description = "Rule execution error"
+            )
         }
-    }
-
-    @PostMapping("/repayment")
-    public ResponseEntity<Map<String, Object>> evaluateRepayment(@RequestBody Map<String, Object> request) {
-        try {
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest("repayment", facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "Repayment evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
-        }
-    }
-
-    @PostMapping("/generic")
-    public ResponseEntity<Map<String, Object>> evaluateGeneric(@RequestBody Map<String, Object> request) {
-        try {
-            String dataType = (String) request.get("dataType");
-            List<Map<String, Object>> facts = (List<Map<String, Object>>) request.get("facts");
-            EvaluationRequest evaluationRequest = new EvaluationRequest(dataType, facts);
-            EvaluationResponse response = executionService.evaluateFacts(evaluationRequest);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", false);
-            result.put("error", "Generic evaluation failed: " + e.getMessage());
-            return ResponseEntity.badRequest().body(result);
-        }
+    )
+    @PostMapping("/")
+    public ResponseEntity<EvaluationResponseDto> evaluateGeneric(@RequestBody EvaluationQueryRequestDto request) {
+        EvaluationQuery evaluationRequest = evaluateQueryMapper.toEntity(request);
+        EvaluationResponseDto response = evaluateMapper.toDto(executionService.evaluateFacts(evaluationRequest));
+        return ResponseEntity.ok(response);
     }
 }

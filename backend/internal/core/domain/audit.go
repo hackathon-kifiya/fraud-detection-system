@@ -43,15 +43,34 @@ const (
 	ActionReviewed       = "reviewed"
 )
 
+// DecisionBreakdown represents the breakdown of how scores were aggregated
+type DecisionBreakdown struct {
+	RuleEngine struct {
+		Score        float64 `json:"score"`
+		Weight       float64 `json:"weight"`
+		Contribution float64 `json:"contribution"`
+	} `json:"rule_engine"`
+	AnomalyDetection struct {
+		Score        float64 `json:"score"`
+		Weight       float64 `json:"weight"`
+		Contribution float64 `json:"contribution"`
+	} `json:"anomaly_detection"`
+	PredictiveEngine struct {
+		Score        float64 `json:"score"`
+		Weight       float64 `json:"weight"`
+		Contribution float64 `json:"contribution"`
+	} `json:"predictive_engine"`
+}
+
 // FlaggedItemDetail represents an enhanced flagged item with original data and scores
 type FlaggedItemDetail struct {
 	FlaggedItem
-	OriginalData    interface{} `json:"original_data"`     // Original transaction/loan/KYC/repayment data
-	RuleEngineScore *float64    `json:"rule_engine_score"` // Score from rule engine
-	MLScore         *float64    `json:"ml_score"`          // Score from ML model
-	AnomalyScore    *float64    `json:"anomaly_score"`     // Score from anomaly detection
-	AuditNotes      []AuditNote `json:"audit_notes"`       // All notes for this item
-	AuditTrail      []AuditLog  `json:"audit_trail"`       // Complete audit trail
+	OriginalData interface{} `json:"original_data"` // Original transaction/loan/KYC/repayment data
+	// Note: Scores (rule_engine_score, ml_score, anomaly_score) are embedded from FlaggedItem
+	// They come from the embedded FlaggedItem struct, not redefined here
+	Breakdown  *DecisionBreakdown `json:"breakdown,omitempty"` // Decision breakdown showing aggregation
+	AuditNotes []AuditNote        `json:"audit_notes"`         // All notes for this item
+	AuditTrail []AuditLog         `json:"audit_trail"`         // Complete audit trail
 }
 
 // ReviewClassificationRequest represents the request to classify a flagged item

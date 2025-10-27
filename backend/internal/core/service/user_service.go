@@ -160,9 +160,9 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListUsers retrieves all users with pagination
-func (s *UserService) ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int64, error) {
-	users, err := s.userRepo.List(ctx, limit, offset)
+// ListUsers retrieves all users with pagination and optional role filter
+func (s *UserService) ListUsers(ctx context.Context, limit, offset int, role string) ([]*domain.User, int64, error) {
+	users, total, err := s.userRepo.List(ctx, limit, offset, role)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list users: %w", err)
 	}
@@ -172,12 +172,7 @@ func (s *UserService) ListUsers(ctx context.Context, limit, offset int) ([]*doma
 		user.Password = ""
 	}
 
-	count, err := s.userRepo.Count(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to count users: %w", err)
-	}
-
-	return users, count, nil
+	return users, total, nil
 }
 
 // ChangePassword changes a user's password

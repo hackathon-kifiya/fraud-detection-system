@@ -16,7 +16,8 @@
     "react-dom": "^18.2.0",
     "react-json-view": "^1.21.3",
     "react-router-dom": "^6.8.0",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "reactflow": "^11.11.4"
   },
   "scripts": {
     "start": "react-scripts start",

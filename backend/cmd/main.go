@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	"com.github.hackathon-kifiya.fraud-detection-system/cmd/router"
 	"com.github.hackathon-kifiya.fraud-detection-system/config"
@@ -28,45 +27,13 @@ func main() {
 	flag.StringVar(&cfg.RuleEngineURL, "rule_engine_url", "", "rule engine URL")
 	flag.StringVar(&cfg.AnomalyDetectionEngineURL, "anomaly_detection_engine_url", "", "anomaly detection engine URL")
 	flag.StringVar(&cfg.PredictiveEngineURL, "predictive_engine_url", "", "predictive engine URL")
-	flag.StringVar(&cfg.RiskAggregationEngineURL, "risk_aggregation_engine_url", "", "risk aggregation engine URL")
+	flag.StringVar(&cfg.DecisionServiceURL, "decision_service_url", "", "decision service URL")
+	flag.StringVar(&cfg.DataManagementServiceURL, "data_management_service_url", "", "data management service URL")
 	flag.StringVar(&cfg.PythonStatsURL, "python_stats_url", "", "python stats URL")
+	flag.BoolVar(&cfg.EnableSwagger, "swagger", true, "enable swagger documentation")
+	flag.StringVar(&cfg.CorsAllowedOrigins, "cors_origins", "", "comma-separated list of allowed CORS origins")
 	flag.BoolVar(&seedDB, "seed", false, "seed database with sample data and exit")
 	flag.Parse()
-
-	// Set default values from environment variables if not provided via flags
-	if cfg.CoreDBConnectionString == "" {
-		cfg.CoreDBConnectionString = os.Getenv("DATABASE_URL")
-	}
-	if cfg.RuleEngineURL == "" {
-		cfg.RuleEngineURL = os.Getenv("ENGINE_URL")
-		if cfg.RuleEngineURL == "" {
-			cfg.RuleEngineURL = "http://localhost:8082/api"
-		}
-	}
-	if cfg.AnomalyDetectionEngineURL == "" {
-		cfg.AnomalyDetectionEngineURL = os.Getenv("ANOMALY_DETECTION_ENGINE_URL")
-		if cfg.AnomalyDetectionEngineURL == "" {
-			cfg.AnomalyDetectionEngineURL = "http://localhost:5001"
-		}
-	}
-	if cfg.PredictiveEngineURL == "" {
-		cfg.PredictiveEngineURL = os.Getenv("PREDICTIVE_ENGINE_URL")
-		if cfg.PredictiveEngineURL == "" {
-			cfg.PredictiveEngineURL = "http://localhost:5002"
-		}
-	}
-	if cfg.RiskAggregationEngineURL == "" {
-		cfg.RiskAggregationEngineURL = os.Getenv("RISK_AGGREGATION_ENGINE_URL")
-		if cfg.RiskAggregationEngineURL == "" {
-			cfg.RiskAggregationEngineURL = "http://localhost:5003"
-		}
-	}
-	if cfg.PythonStatsURL == "" {
-		cfg.PythonStatsURL = os.Getenv("PYTHON_STATS_URL")
-		if cfg.PythonStatsURL == "" {
-			cfg.PythonStatsURL = "http://localhost:5001"
-		}
-	}
 
 	// Initialize database
 	var db *gorm.DB
@@ -108,44 +75,57 @@ func main() {
 	caseAssignmentRepo := repository.NewCaseAssignmentRepository(db)
 	performanceReportRepo := repository.NewPerformanceReportRepository(db)
 	kpiMetricsRepo := repository.NewKPIMetricsRepository(db)
+	callbackRepo := repository.NewCallbackRepository(db)
+	labeledDataRepo := repository.NewLabeledDataRepository(db)
 
 	// Initialize engine clients
 	ruleEngineClient := client.NewRuleEngineClient(cfg.RuleEngineURL)
 	anomalyDetectionClient := client.NewAnomalyDetectionEngineClient(cfg.AnomalyDetectionEngineURL)
 	predictiveEngineClient := client.NewPredictiveEngineClient(cfg.PredictiveEngineURL)
-	riskAggregationClient := client.NewRiskAggregationEngineClient(cfg.RiskAggregationEngineURL)
-
-	// Log engine configurations
-	log.Printf("Rule Engine URL: %s", cfg.RuleEngineURL)
-	log.Printf("Anomaly Detection Engine URL: %s", cfg.AnomalyDetectionEngineURL)
-	log.Printf("Predictive Engine URL: %s", cfg.PredictiveEngineURL)
-	log.Printf("Risk Aggregation Engine URL: %s", cfg.RiskAggregationEngineURL)
-
-	// Initialize clients (for future use)
-	_ = anomalyDetectionClient
-	_ = predictiveEngineClient
-	_ = riskAggregationClient
+	decisionServiceClient := client.NewDecisionServiceClient(cfg.DecisionServiceURL)
+	dataManagementClient := client.NewDataManagementClient(cfg.DataManagementServiceURL)
 
 	// Initialize services
-	jwtSecret := "your-secret-key" // In production, use environment variable
-	userService := service.NewUserService(userRepo, jwtSecret)
-	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo)
-	ruleEvaluationService := service.NewRuleEvaluationService(ruleEngineClient, flaggedItemRepo, flaggedItemService)
-	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
-	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
 
-	// Initialize router
-	r := router.Init()
+	//TODO: use environment variable
+
+	jwtSecret := "your-secret-key"
+	userService := service.NewUserService(userRepo, jwtSecret)
+	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo, dataManagementClient)
+	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo, labeledDataRepo, callbackRepo)
+	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
+	callbackService := service.NewCallbackService(callbackRepo, dataManagementClient)
+	evaluationService := service.NewEvaluationService(
+		ruleEngineClient,
+		anomalyDetectionClient,
+		predictiveEngineClient,
+		decisionServiceClient,
+		flaggedItemRepo,
+		callbackRepo,
+	)
+
+	// Initialize router with CORS configuration
+	routerCfg := &router.RouterConfig{
+		AllowedOrigins: cfg.CorsAllowedOrigins,
+	}
+	r := router.Init(routerCfg)
 
 	// Register health endpoint
 	router.RegisterHealthEndpoint()
+
+	// Register swagger if enabled
+	if cfg.EnableSwagger {
+		router.RegisterSwaggerEndpoint(r)
+	}
 
 	// Initialize handlers
 	handler.InitUserHandler(userService, r)
 	handler.InitFlaggedItemHandler(flaggedItemService, r)
 	handler.InitAuditHandler(auditService, r)
 	handler.InitAdminHandler(adminService, r)
-	handler.InitRuleEvaluationHandler(ruleEvaluationService, r)
+	handler.InitCallbackHandler(callbackService, r)
+	handler.InitDecisionHandler(decisionServiceClient, r)
+	handler.InitEvaluationHandler(evaluationService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

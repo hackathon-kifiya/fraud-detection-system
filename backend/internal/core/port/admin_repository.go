@@ -42,8 +42,8 @@ type CaseAssignmentRepository interface {
 	// GetByFlaggedItemID retrieves assignment for a flagged item
 	GetByFlaggedItemID(ctx context.Context, flaggedItemID string) (*domain.CaseAssignment, error)
 
-	// GetByAuditorID retrieves assignments for an auditor
-	GetByAuditorID(ctx context.Context, auditorID string, limit, offset int) ([]domain.CaseAssignment, int64, error)
+	// GetByAuditorID retrieves assignments for an auditor with optional status filter
+	GetByAuditorID(ctx context.Context, auditorID string, limit, offset int, status string) ([]domain.CaseAssignment, int64, error)
 
 	// List retrieves case assignments with pagination and filters
 	List(ctx context.Context, limit, offset int, status, priority string) ([]domain.CaseAssignment, int64, error)

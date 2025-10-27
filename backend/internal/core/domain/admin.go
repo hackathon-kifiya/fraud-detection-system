@@ -32,6 +32,8 @@ type CaseAssignment struct {
 	Priority      string     `json:"priority" gorm:"not null;default:'medium'"` // low, medium, high, urgent
 	DueDate       *time.Time `json:"due_date" gorm:"column:due_date"`
 	Notes         string     `json:"notes" gorm:"type:text"`
+	CreatedAt     time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt     time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 // TableName specifies the table name for GORM
