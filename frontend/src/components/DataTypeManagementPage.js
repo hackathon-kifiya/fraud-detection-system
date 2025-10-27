@@ -54,6 +54,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
     displayName: "",
     description: "",
     schemaDefinition: "",
+    sampleData: "",
   });
 
   useEffect(() => {
@@ -77,8 +78,20 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
     setLoading(true);
     try {
       const response = await dataTypeAPI.getAll({ limit: 100, offset: 0 });
-      setDataTypes(response.data.data_types || []);
-      setFilteredDataTypes(response.data.data_types || []);
+      // Map API response (snake_case) to frontend format (camelCase)
+      const mappedData = (response.data || []).map(dt => ({
+        id: dt.data_type,
+        name: dt.data_type,
+        displayName: dt.name,
+        description: dt.description,
+        status: dt.status,
+        schemaDefinition: dt.schema_definition,
+        sampleData: dt.sample_data,
+        updatedAt: dt.updated_at,
+        createdAt: dt.created_at,
+      }));
+      setDataTypes(mappedData);
+      setFilteredDataTypes(mappedData);
     } catch (error) {
       onShowSnackbar("Failed to load data types: " + error.message, "error");
     } finally {
@@ -94,6 +107,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
         displayName: dataType.displayName || "",
         description: dataType.description || "",
         schemaDefinition: JSON.stringify(dataType.schemaDefinition || {}, null, 2),
+        sampleData: JSON.stringify(dataType.sampleData || {}, null, 2),
       });
     } else {
       setFormData({
@@ -101,6 +115,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
         displayName: "",
         description: "",
         schemaDefinition: "",
+        sampleData: "",
       });
     }
     setDialogOpen(true);
@@ -114,24 +129,44 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
       displayName: "",
       description: "",
       schemaDefinition: "",
+      sampleData: "",
     });
   };
 
   const handleSave = async () => {
     try {
       setLoading(true);
-      const payload = {
-        data_type: formData.name,
-        name: formData.displayName || formData.name,
-        description: formData.description,
-        schema_definition: JSON.parse(formData.schemaDefinition || "{}"),
-        status: "ACTIVE",
-      };
-
+      
+      // Validate sample data is provided for new data types
+      if (!selectedDataType && !formData.sampleData.trim()) {
+        onShowSnackbar("Sample data is required when creating a new data type", "error");
+        setLoading(false);
+        return;
+      }
+      
       if (selectedDataType) {
+        // Update payload - only send fields that can be updated
+        const payload = {
+          name: formData.displayName || formData.name,
+          description: formData.description,
+          schema_definition: JSON.parse(formData.schemaDefinition || "{}"),
+          sample_data: formData.sampleData ? JSON.parse(formData.sampleData) : undefined,
+          status: "ACTIVE",
+          updated_by: "admin",
+        };
         await dataTypeAPI.update(selectedDataType.id, payload);
         onShowSnackbar("Data type updated successfully", "success");
       } else {
+        // Create payload - include all required fields including sample_data
+        const payload = {
+          data_type: formData.name,
+          name: formData.displayName || formData.name,
+          description: formData.description,
+          schema_definition: JSON.parse(formData.schemaDefinition || "{}"),
+          sample_data: JSON.parse(formData.sampleData),
+          status: "ACTIVE",
+          created_by: "admin",
+        };
         await dataTypeAPI.create(payload);
         onShowSnackbar("Data type created successfully", "success");
       }
@@ -148,7 +183,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const handleActivate = async (dataType) => {
     try {
       setLoading(true);
-      await dataTypeAPI.update(dataType.id, { status: "ACTIVE" });
+      await dataTypeAPI.update(dataType.id, { status: "ACTIVE", updated_by: "admin" });
       onShowSnackbar("Data type activated successfully", "success");
       loadDataTypes();
     } catch (error) {
@@ -161,7 +196,7 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
   const handleDeactivate = async (dataType) => {
     try {
       setLoading(true);
-      await dataTypeAPI.update(dataType.id, { status: "INACTIVE" });
+      await dataTypeAPI.update(dataType.id, { status: "INACTIVE", updated_by: "admin" });
       onShowSnackbar("Data type deactivated successfully", "success");
       loadDataTypes();
     } catch (error) {
@@ -409,6 +444,19 @@ const DataTypeManagementPage = ({ onShowSnackbar }) => {
                 multiline
                 rows={6}
                 placeholder='{"fields": [{"name": "field1", "type": "string"}]}'
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={`Sample Data (JSON) ${!selectedDataType ? "*" : ""}`}
+                value={formData.sampleData}
+                onChange={(e) => setFormData({ ...formData, sampleData: e.target.value })}
+                multiline
+                rows={8}
+                placeholder='{"field1": "example value", "field2": 123}'
+                required={!selectedDataType}
+                helperText={!selectedDataType ? "Sample data is required when creating a new data type" : "Optional: Update the example data"}
               />
             </Grid>
           </Grid>

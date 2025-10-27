@@ -40,6 +40,7 @@ const IntegrationSettingsPage = ({ onShowSnackbar }) => {
   const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCallback, setEditingCallback] = useState(null);
+  const [dataTypes, setDataTypes] = useState([]);
   const [formData, setFormData] = useState({
     data_type: '',
     callback_url: '',
@@ -47,15 +48,6 @@ const IntegrationSettingsPage = ({ onShowSnackbar }) => {
     is_active: true,
     headers: '',
   });
-
-  const dataTypes = [
-    { value: 'transactions', label: 'Transactions' },
-    { value: 'loan_requests', label: 'Loan Requests' },
-    { value: 'credit_history', label: 'Credit History' },
-    { value: 'kyc', label: 'KYC Data' },
-    { value: 'repayments', label: 'Repayments' },
-    { value: 'flagged_items', label: 'Flagged Items' },
-  ];
 
   const httpMethods = [
     { value: 'POST', label: 'POST' },
@@ -65,6 +57,7 @@ const IntegrationSettingsPage = ({ onShowSnackbar }) => {
 
   useEffect(() => {
     fetchCallbacks();
+    fetchAvailableDataTypes();
   }, []);
 
   const fetchCallbacks = async () => {
@@ -76,6 +69,27 @@ const IntegrationSettingsPage = ({ onShowSnackbar }) => {
       setError(err.response?.data?.error || 'Failed to fetch callbacks');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableDataTypes = async () => {
+    try {
+      const response = await callbackAPI.getAvailableDataTypes();
+      // Data management service returns array directly
+      const fetchedDataTypes = Array.isArray(response.data) ? response.data : [];
+      // Transform data types from API to dropdown format
+      const transformedDataTypes = fetchedDataTypes
+        .filter(dt => dt.status === 'ACTIVE')
+        .map(dt => ({
+          value: dt.data_type,
+          label: dt.name || dt.data_type,
+        }));
+      setDataTypes(transformedDataTypes);
+    } catch (err) {
+      console.error('Failed to fetch available data types:', err);
+      // Fallback to empty array if fetch fails
+      setDataTypes([]);
+      onShowSnackbar('Failed to fetch available data types', 'warning');
     }
   };
 

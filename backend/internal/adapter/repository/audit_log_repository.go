@@ -135,7 +135,7 @@ func (r *AuditLogRepository) GetStats(ctx context.Context, userID string) (*doma
 	// Calculate average review time (simplified - time between created and reviewed)
 	var avgReviewTime float64
 	err := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).
-		Select("AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/60)").
+		Select("COALESCE(AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/60), 0)").
 		Where("reviewed_by = ? AND reviewed_at IS NOT NULL", userID).
 		Scan(&avgReviewTime).Error
 	if err != nil {

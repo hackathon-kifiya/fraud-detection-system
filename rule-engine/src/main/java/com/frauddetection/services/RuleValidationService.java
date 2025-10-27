@@ -1,9 +1,7 @@
 package com.frauddetection.services;
 
-import com.frauddetection.domain.DataType;
 import com.frauddetection.domain.ValidationResult;
-import com.frauddetection.exceptions.ValidationException;
-import com.frauddetection.repository.DataTypeRepository;
+import com.frauddetection.client.DataManagementClient;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
@@ -22,7 +20,7 @@ public class RuleValidationService {
     private static final String PACKAGE_PATTERN = "package\\s+rules\\s*;";
 
     @Autowired
-    private DataTypeRepository dataTypeRepository;
+    private DataManagementClient dataManagementClient;
 
     public ValidationResult validateDrl(String drlContent, String dataType) {
         ValidationResult result = new ValidationResult();
@@ -111,27 +109,17 @@ public class RuleValidationService {
 
     /**
      * Validates semantic aspects of the DRL against the data type schema.
-     * Extracts field names from DRL conditions and validates against schema.
+     * Fetches schema from data-management-service and validates field names.
      */
     private boolean validateSemantics(String drlContent, String dataType, ValidationResult result) {
         List<String> errors = new ArrayList<>();
         
-        // Get data type from database
-        DataType dataTypeEntity = dataTypeRepository.findByDataType(dataType).orElse(null);
-        if (dataTypeEntity == null) {
-            // Data type doesn't exist - this will be caught by createRule flow
-            return true; // Let createRule handle this error
-        }
-        
-        if (dataTypeEntity.getSchemaDefinition() == null) {
-            return true; // No schema defined, skip semantic validation
-        }
-        
         try {
-            // Parse schema to get field definitions
-            Map<String, Object> schemaMap = parseSchemaFromJson(dataTypeEntity.getSchemaDefinition());
+            // Fetch schema from data-management-service
+            Map<String, Object> schemaMap = dataManagementClient.getDataTypeSchema(dataType);
+            
             if (schemaMap == null || !schemaMap.containsKey("fields")) {
-                return true; // No fields defined in schema
+                return true; // No schema defined or no fields, skip semantic validation
             }
             
             @SuppressWarnings("unchecked")
@@ -163,18 +151,6 @@ public class RuleValidationService {
             errors.add("Semantic validation failed: " + e.getMessage());
             result.setErrors(errors);
             return false;
-        }
-    }
-    
-    private Map<String, Object> parseSchemaFromJson(String jsonSchema) {
-        if (jsonSchema == null || jsonSchema.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return mapper.readValue(jsonSchema, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            throw new ValidationException("Invalid schema definition JSON: " + e.getMessage());
         }
     }
     

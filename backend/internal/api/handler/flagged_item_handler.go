@@ -167,7 +167,7 @@ func getStatsHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"stats": stats})
+	c.JSON(http.StatusOK, stats)
 }
 
 // getFlaggedItemsByTypeHandler handles getting flagged items by type

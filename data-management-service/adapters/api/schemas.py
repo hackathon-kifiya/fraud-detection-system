@@ -25,7 +25,7 @@ class CreateDataTypeRequest(BaseModel):
     name: str = Field(..., description="Display name")
     description: str = Field(..., description="Description")
     schema_definition: Dict[str, Any] = Field(..., description="Schema definition")
-    sample_data: Optional[Dict[str, Any]] = Field(None, description="Sample data")
+    sample_data: Dict[str, Any] = Field(..., description="Sample data (required)")
     status: str = Field(default="ACTIVE", description="Status")
     created_by: str = Field(..., description="Creator")
     

@@ -42,6 +42,7 @@ services:
     build: ./decision
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
+      - DATA_MANAGEMENT_SERVICE_URL=http://data-management-service:5004
     ports:
       - "5003:5003"
     depends_on:
@@ -113,10 +114,13 @@ services:
         - REACT_APP_BACKEND_URL=http://localhost:8080
         - REACT_APP_RULE_ENGINE_URL=http://localhost:8081
         - REACT_APP_DECISION_SERVICE_URL=http://localhost:5003
+        - REACT_APP_DATA_MANAGEMENT_SERVICE_URL=http://localhost:5004
     ports:
       - "3000:3000"
     depends_on:
       - backend
+      - rule-engine
+      - data-management-service
     restart: unless-stopped
 
   uptime-kuma:

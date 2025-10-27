@@ -44,21 +44,15 @@ const Dashboard = ({ onShowSnackbar }) => {
       const response = await flaggedAPI.getStats();
       setStats(response.data);
     } catch (error) {
-      // If stats API is not available, use default values
-      console.warn("Stats API not available, using default values");
+      // If stats API is not available, use empty values
+      console.warn("Stats API not available, using empty values");
       setStats({
         totalFlagged: 0,
         pendingReview: 0,
         confirmedFraud: 0,
         verifiedSafe: 0,
         highRiskCount: 0,
-        flaggedByType: {
-          transactions: 0,
-          loan_requests: 0,
-          credit_history: 0,
-          kyc: 0,
-          repayments: 0,
-        },
+        flaggedByType: {},
         recentActivity: [],
       });
     } finally {
@@ -70,28 +64,39 @@ const Dashboard = ({ onShowSnackbar }) => {
     loadStats();
   }, []);
 
-  const fraudDetectionTypes = [
-    {
-      key: "transactions",
-      label: "Transactions",
-      icon: AccountBalance,
-      color: "#1976d2",
-    },
-    {
-      key: "loan_requests",
-      label: "Loan Requests",
-      icon: CreditCard,
-      color: "#388e3c",
-    },
-    {
-      key: "credit_history",
-      label: "Credit History",
-      icon: Assessment,
-      color: "#f57c00",
-    },
-    { key: "kyc", label: "KYC Data", icon: Person, color: "#7b1fa2" },
-    { key: "repayments", label: "Repayments", icon: Payment, color: "#d32f2f" },
-  ];
+  // Icon mapping for different data types
+  const iconMapping = {
+    transactions: AccountBalance,
+    loan_requests: CreditCard,
+    credit_history: Assessment,
+    kyc: Person,
+    repayments: Payment,
+  };
+
+  // Color mapping for different data types
+  const colorMapping = {
+    transactions: "#1976d2",
+    loan_requests: "#388e3c",
+    credit_history: "#f57c00",
+    kyc: "#7b1fa2",
+    repayments: "#d32f2f",
+  };
+
+  // Helper function to format label from key
+  const formatLabel = (key) => {
+    return key
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Dynamically generate fraud detection types from stats
+  const fraudDetectionTypes = Object.keys(stats.flaggedByType || {}).map(key => ({
+    key: key,
+    label: formatLabel(key),
+    icon: iconMapping[key] || Assessment, // Default icon if not mapped
+    color: colorMapping[key] || "#757575", // Default color if not mapped
+  }));
 
   if (loading) {
     return (
@@ -315,7 +320,7 @@ const Dashboard = ({ onShowSnackbar }) => {
               </Tabs>
             </Box>
 
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: 2 }}>
               {fraudDetectionTypes.map((type, index) => {
                 const IconComponent = type.icon;
                 const count = stats.flaggedByType?.[type.key] || 0;
@@ -328,112 +333,53 @@ const Dashboard = ({ onShowSnackbar }) => {
                     key={type.key}
                     sx={{ display: selectedTab === index ? "block" : "none" }}
                   >
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={6}>
-                        <Card
-                          sx={{
-                            borderRadius: 2,
-                            boxShadow: 1,
-                            height: "100%",
-                            bgcolor: "#ffffff",
-                            border: "1px solid #e0e0e0",
-                          }}
-                        >
-                          <CardContent>
-                            <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
-                            <Box
-                              sx={{
-                                p: 2,
-                                borderRadius: 2,
-                                bgcolor: "#f5f5f5",
-                                mr: 2,
-                              }}
-                            >
-                              <IconComponent sx={{ fontSize: 32, color: "#757575" }} />
-                            </Box>
-                            <Box>
-                              <Typography
-                                variant='h6'
-                                sx={{ fontWeight: "bold", color: "#424242" }}
-                              >
-                                {type.label}
-                              </Typography>
-                              <Typography variant='body2' color='text.secondary'>
-                                Flagged Items
-                              </Typography>
-                            </Box>
-                          </Box>
-                          <Typography
-                            variant='h2'
+                    <Card
+                      sx={{
+                        borderRadius: 2,
+                        boxShadow: 1,
+                        bgcolor: "#ffffff",
+                        border: "1px solid #e0e0e0",
+                      }}
+                    >
+                      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                          <Box
                             sx={{
-                              fontWeight: "bold",
-                              color: "#424242",
-                              mb: 1,
+                              p: 1.5,
+                              borderRadius: 2,
+                              bgcolor: "#f5f5f5",
+                              mr: 2,
                             }}
                           >
-                            {count}
-                          </Typography>
-                          <Typography variant='body2' color='text.secondary'>
-                            {percentage}% of total flagged items
-                          </Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Card
+                            <IconComponent sx={{ fontSize: 32, color: "#757575" }} />
+                          </Box>
+                          <Box>
+                            <Typography
+                              variant='h6'
+                              sx={{ fontWeight: "bold", color: "#424242" }}
+                            >
+                              {type.label}
+                            </Typography>
+                            <Typography variant='body2' color='text.secondary'>
+                              Flagged Items
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography
+                          variant='h2'
                           sx={{
-                            borderRadius: 2,
-                            boxShadow: 1,
-                            height: "100%",
-                            bgcolor: "#ffffff",
-                            border: "1px solid #e0e0e0",
+                            fontWeight: "bold",
+                            color: "#424242",
+                            mb: 0.5,
                           }}
                         >
-                          <CardContent>
-                            <Typography
-                              variant='subtitle1'
-                              sx={{ fontWeight: "bold", color: "#424242", mb: 2 }}
-                            >
-                              Quick Actions
-                            </Typography>
-                            <Button
-                              variant='contained'
-                              startIcon={<Security />}
-                              href={`/${type.key.replace("_", "-")}`}
-                              fullWidth
-                              sx={{
-                                mb: 2,
-                                borderRadius: 2,
-                                py: 1.5,
-                                bgcolor: "#1976d2",
-                                "&:hover": {
-                                  bgcolor: "#1565c0",
-                                },
-                              }}
-                            >
-                              View {type.label} Detection
-                            </Button>
-                            <Button
-                              variant='outlined'
-                              startIcon={<Assessment />}
-                              fullWidth
-                              sx={{
-                                borderRadius: 2,
-                                py: 1.5,
-                                borderColor: "#1976d2",
-                                color: "#1976d2",
-                                "&:hover": {
-                                  borderColor: "#1976d2",
-                                  bgcolor: "#e3f2fd",
-                                },
-                              }}
-                            >
-                              View Details
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    </Grid>
+                          {count}
+                        </Typography>
+                        <Typography variant='body2' color='text.secondary'>
+                          {percentage}% of total flagged items
+                        </Typography>
+                      </CardContent>
+                    </Card>
                   </Box>
                 );
               })}

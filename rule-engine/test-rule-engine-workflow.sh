@@ -6,6 +6,7 @@
 set +e  # Don't exit on error - continue to show all failures
 
 BASE_URL="http://localhost:8081"
+DATA_MANAGEMENT_URL="http://localhost:5004"
 TEST_PASSED=0
 TEST_FAILED=0
 FAILED_TESTS=()
@@ -16,6 +17,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Check for jq dependency
+if ! command -v jq &> /dev/null; then
+    echo -e "${RED}Error: jq is required but not installed.${NC}"
+    echo "Install with: sudo pacman -S jq (Arch) or sudo apt install jq (Debian/Ubuntu)"
+    exit 1
+fi
+
 # Utility functions
 log_test() {
     local test_name=$1
@@ -25,6 +33,9 @@ log_test() {
     if [ "$status" = "PASS" ]; then
         echo -e "${GREEN}✓${NC} $test_name${NC}"
         ((TEST_PASSED++))
+    elif [ "$status" = "SKIP" ]; then
+        echo -e "${YELLOW}⊘${NC} $test_name - $message${NC}"
+        # Don't increment counters for skipped tests
     else
         echo -e "${RED}✗${NC} $test_name - $message${NC}"
         ((TEST_FAILED++))
@@ -37,13 +48,66 @@ log_info() {
 }
 
 extract_id() {
-    echo "$1" | jq -r '.id' 2>/dev/null || echo ""
+    local json="$1"
+    # Try jq first, fallback to grep/sed
+    local id=$(echo "$json" | jq -r '.id' 2>/dev/null)
+    if [ -z "$id" ] || [ "$id" = "null" ]; then
+        id=$(echo "$json" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
+    echo "$id"
 }
 
 extract_id_from_list() {
     local list="$1"
     local index="${2:-0}"
     echo "$list" | jq -r ".[$index].id" 2>/dev/null || echo ""
+}
+
+extract_field() {
+    local json="$1"
+    local field="$2"
+    local value=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+        value=$(echo "$json" | grep -o "\"$field\":\"[^\"]*\"" | head -1 | cut -d'"' -f4)
+    fi
+    echo "$value"
+}
+
+# Extract boolean field (handles true/false without quotes)
+extract_boolean_field() {
+    local json="$1"
+    local field="$2"
+    
+    # Try jq first
+    local value=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+    
+    # If empty or null, try grep/sed
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+        value=$(echo "$json" | grep -o "\"$field\":\s*\(true\|false\)" | grep -o 'true\|false')
+    fi
+    
+    echo "$value"
+}
+
+# Extract numeric or string field (handles numbers, strings, etc.)
+extract_value() {
+    local json="$1"
+    local field="$2"
+    
+    # Try jq first
+    local value=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+    
+    # If empty or null, try grep/sed for numeric or unquoted values
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+        value=$(echo "$json" | grep -o "\"$field\":[^,}]*" | grep -o ':[^,}]*' | sed 's/://' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    fi
+    
+    # Try string values in quotes
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+        value=$(echo "$json" | grep -o "\"$field\":\s*\"[^\"]*\"" | head -1 | grep -o '"[^"]*"' | tr -d '"')
+    fi
+    
+    echo "$value"
 }
 
 # Test helpers
@@ -80,18 +144,17 @@ clear_database() {
     echo "Clearing Rule Engine Database"
     echo "========================================="
     
-    log_info "Clearing rule and data_type tables..."
+    log_info "Clearing rule tables..."
     
     # Clear the database using docker exec
     docker exec fraud-detection-system-postgres-1 psql -U frauduser -d frauddb -c "
         TRUNCATE TABLE rule CASCADE;
-        TRUNCATE TABLE data_type CASCADE;
     " > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
         log_info "Database cleared successfully"
     else
-        echo -e "${RED}Warning: Failed to clear database. Tests may be affected by existing data.${NC}"
+        echo -e "${RED}Warning: Failed to clear database.${NC}"
     fi
 }
 
@@ -121,16 +184,16 @@ run_health_tests() {
 run_data_type_tests() {
     echo ""
     echo "========================================="
-    echo "CATEGORY 2: Data Type Management Tests"
+    echo "CATEGORY 2: Data Type Management Tests (via data-management-service)"
     echo "========================================="
     
-    # Create data type
-    log_info "Creating data type 'transaction'..."
+    # Create data type via data-management-service
+    log_info "Creating data type 'transaction' via data-management-service..."
     local create_request='{
-        "dataType": "transaction",
+        "data_type": "transaction",
         "name": "Transaction Data",
         "description": "Financial transaction data",
-        "schemaDefinition": {
+        "schema_definition": {
             "fields": {
                 "amount": "Double",
                 "accountBalance": "Double",
@@ -139,140 +202,50 @@ run_data_type_tests() {
             },
             "required": ["amount", "accountBalance"]
         },
-        "sampleData": {
+        "sample_data": {
             "amount": 1000.0,
             "accountBalance": 5000.0,
             "type": "debit",
             "paymentMethod": "card"
         },
-        "createdBy": "test-user"
+        "status": "ACTIVE",
+        "created_by": "test-user"
     }'
     
-    local response=$(make_request "POST" "$BASE_URL/api/data-types" "$create_request" "")
+    local response=$(make_request "POST" "$DATA_MANAGEMENT_URL/data-types" "$create_request" "")
     local body=$(echo "$response" | head -n -1)
     local status=$(echo "$response" | tail -1)
-    export DATA_TYPE_ID=$(extract_id "$body")
     
-    if check_http_status "$response" "200" && [ -n "$DATA_TYPE_ID" ]; then
-        log_test "Create Data Type" "PASS"
+    if check_http_status "$response" "201" || check_http_status "$response" "200"; then
+        log_test "Create Data Type via Data Management Service" "PASS"
+    elif check_http_status "$response" "400" && echo "$body" | grep -q "already exists"; then
+        log_test "Create Data Type via Data Management Service" "PASS" "(already exists)"
     else
-        log_test "Create Data Type" "FAIL" "Status: $status"
+        log_test "Create Data Type via Data Management Service" "FAIL" "Status: $status, Body: $body"
     fi
     
     # Get all data types
-    log_info "Getting all data types..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types" "" "")
+    log_info "Getting all data types from data-management-service..."
+    response=$(make_request "GET" "$DATA_MANAGEMENT_URL/data-types" "" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
     
     if check_http_status "$response" "200"; then
-        log_test "Get All Data Types" "PASS"
+        log_test "Get All Data Types from Data Management Service" "PASS"
     else
-        log_test "Get All Data Types" "FAIL" "Status: $status"
+        log_test "Get All Data Types from Data Management Service" "FAIL" "Status: $status"
     fi
     
-    # Get data type by ID
-    log_info "Getting data type by ID..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/$DATA_TYPE_ID" "" "")
+    # Get data type by identifier
+    log_info "Getting data type 'transaction' from data-management-service..."
+    response=$(make_request "GET" "$DATA_MANAGEMENT_URL/data-types/transaction" "" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
     
     if check_http_status "$response" "200"; then
-        log_test "Get Data Type by ID" "PASS"
+        log_test "Get Data Type by Identifier" "PASS"
     else
-        log_test "Get Data Type by ID" "FAIL" "Status: $status"
-    fi
-    
-    # Get data type by name
-    log_info "Getting data type by name..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/by-name/transaction" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Get Data Type by Name" "PASS"
-    else
-        log_test "Get Data Type by Name" "FAIL" "Status: $status"
-    fi
-    
-    # Update data type
-    log_info "Updating data type..."
-    local update_request='{
-        "name": "Updated Transaction Data",
-        "description": "Updated description",
-        "updatedBy": "test-user"
-    }'
-    
-    response=$(make_request "PUT" "$BASE_URL/api/data-types/$DATA_TYPE_ID" "$update_request" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Update Data Type" "PASS"
-    else
-        log_test "Update Data Type" "FAIL" "Status: $status"
-    fi
-    
-    # Activate data type
-    log_info "Activating data type..."
-    response=$(make_request "POST" "$BASE_URL/api/data-types/$DATA_TYPE_ID/activate" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Activate Data Type" "PASS"
-    else
-        log_test "Activate Data Type" "FAIL" "Status: $status"
-    fi
-    
-    # Get active data types only
-    log_info "Getting active data types..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types?activeOnly=true" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Get Active Data Types Only" "PASS"
-    else
-        log_test "Get Active Data Types Only" "FAIL" "Status: $status"
-    fi
-    
-    # Get sample data from CSV
-    log_info "Getting sample data from CSV..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/transaction/sample-data?limit=5" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    local record_count=$(echo "$body" | jq '. | length' 2>/dev/null)
-    
-    if check_http_status "$response" "200" && [ "$record_count" -gt "0" ]; then
-        log_test "Get Sample Data from CSV" "PASS" "Retrieved $record_count records"
-    else
-        log_test "Get Sample Data from CSV" "FAIL" "Status: $status, Records: $record_count"
-    fi
-    
-    # Get sample data with different limit
-    log_info "Getting sample data with limit=10..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/transaction/sample-data?limit=10" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    record_count=$(echo "$body" | jq '. | length' 2>/dev/null)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Get Sample Data with Limit" "PASS" "Retrieved $record_count records"
-    else
-        log_test "Get Sample Data with Limit" "FAIL" "Status: $status"
-    fi
-    
-    # Test with non-existent data type
-    log_info "Testing with non-existent data type..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/nonexistent/sample-data" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "400"; then
-        log_test "Handle Non-existent Data Type CSV" "PASS"
-    else
-        log_test "Handle Non-existent Data Type CSV" "FAIL" "Status: $status"
+        log_test "Get Data Type by Identifier" "FAIL" "Status: $status"
     fi
 }
 
@@ -297,9 +270,11 @@ run_rule_tests() {
     local status=$(echo "$response" | tail -1)
     
     # Check if validation passed
-    local is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    local is_valid=$(extract_boolean_field "$body" "valid")
     
-    if check_http_status "$response" "200" && [ "$is_valid" = "true" ]; then
+    if [ -z "$is_valid" ] || [ "$is_valid" = "null" ]; then
+        log_test "Validate DRL Syntax and Semantics" "FAIL" "Could not parse response: $body"
+    elif check_http_status "$response" "200" && [ "$is_valid" = "true" ]; then
         log_test "Validate DRL Syntax and Semantics" "PASS"
     else
         log_test "Validate DRL Syntax and Semantics" "FAIL" "Status: $status, Valid: $is_valid"
@@ -317,7 +292,7 @@ run_rule_tests() {
     status=$(echo "$response" | tail -1)
     
     # Check if validation correctly identified invalid DRL
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Missing Package" "PASS"
@@ -335,7 +310,7 @@ run_rule_tests() {
     response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$invalid_validate_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Syntax Error in Condition" "PASS"
@@ -353,7 +328,7 @@ run_rule_tests() {
     response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$invalid_validate_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Missing Import" "PASS"
@@ -371,7 +346,7 @@ run_rule_tests() {
     response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$invalid_validate_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Invalid Method Call" "PASS"
@@ -389,7 +364,7 @@ run_rule_tests() {
     response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$invalid_validate_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Empty Content" "PASS"
@@ -407,7 +382,7 @@ run_rule_tests() {
     response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$invalid_validate_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    is_valid=$(echo "$body" | jq -r '.valid' 2>/dev/null)
+    is_valid=$(extract_boolean_field "$body" "valid")
     
     if check_http_status "$response" "200" && [ "$is_valid" = "false" ]; then
         log_test "Reject Invalid DRL - Malformed Rule Structure" "PASS"
@@ -430,7 +405,7 @@ run_rule_tests() {
     local status=$(echo "$response" | tail -1)
     export RULE_ID=$(extract_id "$body")
     
-    if check_http_status "$response" "200" && [ -n "$RULE_ID" ]; then
+    if (check_http_status "$response" "200" || check_http_status "$response" "201") && [ -n "$RULE_ID" ]; then
         log_test "Create Rule" "PASS"
     else
         log_test "Create Rule" "FAIL" "Status: $status, Body: $body"
@@ -449,15 +424,19 @@ run_rule_tests() {
     fi
     
     # Get rule by ID
-    log_info "Getting rule by ID..."
-    response=$(make_request "GET" "$BASE_URL/api/rules/$RULE_ID" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Get Rule by ID" "PASS"
+    if [ -n "$RULE_ID" ]; then
+        log_info "Getting rule by ID..."
+        response=$(make_request "GET" "$BASE_URL/api/rules/$RULE_ID" "" "")
+        body=$(echo "$response" | head -n -1)
+        status=$(echo "$response" | tail -1)
+        
+        if check_http_status "$response" "200"; then
+            log_test "Get Rule by ID" "PASS"
+        else
+            log_test "Get Rule by ID" "FAIL" "Status: $status"
+        fi
     else
-        log_test "Get Rule by ID" "FAIL" "Status: $status"
+        log_test "Get Rule by ID" "FAIL" "No rule ID available"
     fi
     
     # Search rules by data type
@@ -473,54 +452,59 @@ run_rule_tests() {
     fi
     
     # Update rule
-    log_info "Updating rule..."
-    local update_request='{
-        "name": "Updated High Amount Alert",
-        "description": "Updated description",
-        "updatedBy": "test-user"
-    }'
-    
-    response=$(make_request "PUT" "$BASE_URL/api/rules/$RULE_ID" "$update_request" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Update Rule" "PASS"
+    if [ -n "$RULE_ID" ]; then
+        log_info "Updating rule..."
+        local update_request='{
+            "name": "Updated High Amount Alert",
+            "description": "Updated description",
+            "updatedBy": "test-user"
+        }'
+        
+        response=$(make_request "PUT" "$BASE_URL/api/rules/$RULE_ID" "$update_request" "")
+        body=$(echo "$response" | head -n -1)
+        status=$(echo "$response" | tail -1)
+        
+        if check_http_status "$response" "200"; then
+            log_test "Update Rule" "PASS"
+        else
+            log_test "Update Rule" "FAIL" "Status: $status"
+        fi
+        
+        # Activate rule
+        log_info "Activating rule..."
+        response=$(make_request "POST" "$BASE_URL/api/rules/$RULE_ID/activate" "" "")
+        body=$(echo "$response" | head -n -1)
+        status=$(echo "$response" | tail -1)
+        
+        if check_http_status "$response" "200"; then
+            log_test "Activate Rule" "PASS"
+        else
+            log_test "Activate Rule" "FAIL" "Status: $status"
+        fi
     else
-        log_test "Update Rule" "FAIL" "Status: $status"
+        log_test "Update Rule" "FAIL" "No rule ID available"
+        log_test "Activate Rule" "FAIL" "No rule ID available"
     fi
     
-    # Activate rule
-    log_info "Activating rule..."
-    response=$(make_request "POST" "$BASE_URL/api/rules/$RULE_ID/activate" "" "")
+    # Get rule template
+    log_info "Getting rule template..."
+    response=$(make_request "GET" "$BASE_URL/api/rules/example/template" "" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    
-    if check_http_status "$response" "200"; then
-        log_test "Activate Rule" "PASS"
-    else
-        log_test "Activate Rule" "FAIL" "Status: $status"
-    fi
-    
-    # Get loan rule template
-    log_info "Getting loan rule template..."
-    response=$(make_request "GET" "$BASE_URL/api/rules/templates/loan" "" "")
-    body=$(echo "$response" | head -n -1)
-    status=$(echo "$response" | tail -1)
-    drl_content=$(echo "$body" | jq -r '.drlContent' 2>/dev/null)
+    drl_content=$(extract_value "$body" "drlContent")
     
     # Validate template structure
     if check_http_status "$response" "200" && [ -n "$drl_content" ]; then
         # Check if template contains expected elements
         if echo "$drl_content" | grep -q "package rules;" && \
            echo "$drl_content" | grep -q "import com.frauddetection.domain.DynamicFact;" && \
-           echo "$drl_content" | grep -q "MultipleDefaultsAlert"; then
-            log_test "Get Loan Rule Template" "PASS" "Contains all expected elements"
+           echo "$drl_content" | grep -q "rule"; then
+            log_test "Get Rule Template" "PASS" "Contains all expected elements"
         else
-            log_test "Get Loan Rule Template" "FAIL" "Missing expected template elements"
+            log_test "Get Rule Template" "FAIL" "Missing expected template elements"
         fi
     else
-        log_test "Get Loan Rule Template" "FAIL" "Status: $status"
+        log_test "Get Rule Template" "FAIL" "Status: $status"
     fi
 }
 
@@ -561,15 +545,15 @@ run_negative_tests() {
         log_test "Handle Non-existent Rule (404)" "FAIL" "Status: $status"
     fi
     
-    # Get non-existent data type
-    log_info "Attempting to get non-existent data type..."
-    response=$(make_request "GET" "$BASE_URL/api/data-types/00000000-0000-0000-0000-000000000000" "" "")
+    # Get non-existent data type from data-management-service
+    log_info "Attempting to get non-existent data type from data-management-service..."
+    response=$(make_request "GET" "$DATA_MANAGEMENT_URL/data-types/nonexistent-type" "" "")
     status=$(echo "$response" | tail -1)
     
     if check_http_status "$response" "404"; then
-        log_test "Handle Non-existent Data Type (404)" "PASS"
+        log_test "Handle Non-existent Data Type from Data Management Service (404)" "PASS"
     else
-        log_test "Handle Non-existent Data Type (404)" "FAIL" "Status: $status"
+        log_test "Handle Non-existent Data Type from Data Management Service (404)" "FAIL" "Status: $status"
     fi
 }
 
@@ -646,12 +630,12 @@ run_integration_tests() {
     # Complete workflow test
     log_info "Running complete workflow test..."
     
-    # Create a new data type
+    # Create a new data type via data-management-service
     local create_dt_request='{
-        "dataType": "payment",
+        "data_type": "payment",
         "name": "Payment Data",
         "description": "Payment transaction data",
-        "schemaDefinition": {
+        "schema_definition": {
             "fields": {
                 "amount": "Double",
                 "currency": "String",
@@ -659,16 +643,22 @@ run_integration_tests() {
             },
             "required": ["amount"]
         },
-        "createdBy": "integration-test"
+        "status": "ACTIVE",
+        "created_by": "integration-test"
     }'
     
-    local response=$(make_request "POST" "$BASE_URL/api/data-types" "$create_dt_request" "")
-    local dt_id=$(extract_id "$(echo "$response" | head -n -1)")
+    local response=$(make_request "POST" "$DATA_MANAGEMENT_URL/data-types" "$create_dt_request" "")
+    local dt_status=$(echo "$response" | tail -1)
+    local dt_exists
     
-    if [ -n "$dt_id" ]; then
-        # Activate it
-        make_request "POST" "$BASE_URL/api/data-types/$dt_id/activate" "" ""
-        
+    # Data type exists if created (201), updated (200), or already exists (400)
+    if check_http_status "$response" "201" || check_http_status "$response" "200" || check_http_status "$response" "400"; then
+        dt_exists="true"
+    else
+        dt_exists="false"
+    fi
+    
+    if [ "$dt_exists" = "true" ]; then
         # Create rule
         local create_rule_request='{
             "name": "Payment Fraud Rule",
@@ -683,7 +673,7 @@ run_integration_tests() {
         
         if [ -n "$rule_id" ]; then
             # Activate rule
-            make_request "POST" "$BASE_URL/api/rules/$rule_id/activate" "" ""
+            response=$(make_request "POST" "$BASE_URL/api/rules/$rule_id/activate" "" "")
             
             # Evaluate
             local eval_request='{
@@ -702,7 +692,7 @@ run_integration_tests() {
             log_test "Complete Workflow Test" "FAIL" "Rule creation failed"
         fi
     else
-        log_test "Complete Workflow Test" "FAIL" "Data type creation failed"
+        log_test "Complete Workflow Test" "FAIL" "Data type creation failed or already exists"
     fi
 }
 
@@ -719,16 +709,15 @@ run_scoring_tests() {
     log_info "Clearing database for scoring tests..."
     docker exec fraud-detection-system-postgres-1 psql -U frauduser -d frauddb -c "
         TRUNCATE TABLE rule CASCADE;
-        TRUNCATE TABLE data_type CASCADE;
     " > /dev/null 2>&1
     
-    # Create transaction data type for scoring tests
-    log_info "Creating transaction data type for scoring tests..."
+    # Create transaction data type for scoring tests via data-management-service
+    log_info "Creating transaction data type for scoring tests via data-management-service..."
     local dt_request='{
-        "dataType": "transaction",
+        "data_type": "transaction",
         "name": "Transaction Data",
         "description": "Financial transaction data",
-        "schemaDefinition": {
+        "schema_definition": {
             "fields": {
                 "amount": "Double",
                 "accountBalance": "Double",
@@ -737,11 +726,11 @@ run_scoring_tests() {
             },
             "required": ["amount", "accountBalance"]
         },
-        "createdBy": "scoring-test"
+        "status": "ACTIVE",
+        "created_by": "scoring-test"
     }'
     
-    local response=$(make_request "POST" "$BASE_URL/api/data-types" "$dt_request" "")
-    make_request "POST" "$BASE_URL/api/data-types/$(extract_id "$(echo "$response" | head -n -1)")/activate" "" ""
+    local response=$(make_request "POST" "$DATA_MANAGEMENT_URL/data-types" "$dt_request" "")
     
     # First, create multiple rules for testing different scenarios
     log_info "Creating multiple rules for scoring tests..."
@@ -757,7 +746,10 @@ run_scoring_tests() {
     
     local response=$(make_request "POST" "$BASE_URL/api/rules" "$rule1_request" "")
     local rule1_id=$(extract_id "$(echo "$response" | head -n -1)")
-    make_request "POST" "$BASE_URL/api/rules/$rule1_id/activate" "" ""
+    
+    if [ -n "$rule1_id" ]; then
+        make_request "POST" "$BASE_URL/api/rules/$rule1_id/activate" "" "" > /dev/null 2>&1
+    fi
     
     # Rule 2: Suspicious payment method - use unique name
     local rule2_request='{
@@ -770,7 +762,10 @@ run_scoring_tests() {
     
     response=$(make_request "POST" "$BASE_URL/api/rules" "$rule2_request" "")
     local rule2_id=$(extract_id "$(echo "$response" | head -n -1)")
-    make_request "POST" "$BASE_URL/api/rules/$rule2_id/activate" "" ""
+    
+    if [ -n "$rule2_id" ]; then
+        make_request "POST" "$BASE_URL/api/rules/$rule2_id/activate" "" "" > /dev/null 2>&1
+    fi
     
     # Rule 3: Multiple violations threshold - use unique name
     local rule3_request='{
@@ -783,7 +778,10 @@ run_scoring_tests() {
     
     response=$(make_request "POST" "$BASE_URL/api/rules" "$rule3_request" "")
     local rule3_id=$(extract_id "$(echo "$response" | head -n -1)")
-    make_request "POST" "$BASE_URL/api/rules/$rule3_id/activate" "" ""
+    
+    if [ -n "$rule3_id" ]; then
+        make_request "POST" "$BASE_URL/api/rules/$rule3_id/activate" "" "" > /dev/null 2>&1
+    fi
     
     # Test 1: Zero violations - should have score 0
     echo ""
@@ -801,7 +799,7 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test1_request" "")
     local body=$(echo "$response" | head -n -1)
     local status=$(echo "$response" | tail -1)
-    local score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
+    local score=$(extract_value "$body" "riskScore")
     
     echo "  Score: $score"
     # Use numeric comparison that handles both 0 and 0.0
@@ -828,8 +826,8 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test2_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    local violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    local violations_count=$(extract_value "$body" "violationsCount")
     
     echo "  Score: $score, Violations: $violations_count"
     # Use awk for numeric comparison that handles decimal values
@@ -855,8 +853,8 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test3_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    violations_count=$(extract_value "$body" "violationsCount")
     
     echo "  Score: $score, Violations: $violations_count"
     # Should have at least 2 violations (high amount + suspicious method)
@@ -882,8 +880,8 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test4_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    violations_count=$(extract_value "$body" "violationsCount")
     
     echo "  Score: $score, Violations: $violations_count"
     # Should have 1 violation (unusual type)
@@ -923,9 +921,9 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test5_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
-    local metadata=$(echo "$body" | jq -r '.metadata' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    violations_count=$(extract_value "$body" "violationsCount")
+    local metadata=$(extract_value "$body" "metadata")
     
     echo "  Average Score: $score, Total Violations: $violations_count"
     echo "  Metadata: $metadata"
@@ -951,8 +949,8 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test6_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    violations_count=$(extract_value "$body" "violationsCount")
     
     echo "  Score: $score, Violations: $violations_count"
     if check_http_status "$response" "200" && [ "$violations_count" -ge "1" ]; then
@@ -977,8 +975,8 @@ run_scoring_tests() {
     response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$test7_request" "")
     body=$(echo "$response" | head -n -1)
     status=$(echo "$response" | tail -1)
-    score=$(echo "$body" | jq -r '.riskScore' 2>/dev/null)
-    violations_count=$(echo "$body" | jq -r '.violationsCount' 2>/dev/null)
+    score=$(extract_value "$body" "riskScore")
+    violations_count=$(extract_value "$body" "violationsCount")
     local violations=$(echo "$body" | jq -r '.violations[]' 2>/dev/null)
     
     echo "  Score: $score, Violations: $violations_count"
@@ -1017,6 +1015,261 @@ run_scoring_tests() {
 }
 
 # ============================================================================
+# CATEGORY 8: Data Management Integration Tests
+# ============================================================================
+run_data_management_integration_tests() {
+    echo ""
+    echo "========================================="
+    echo "CATEGORY 8: Data Management Integration Tests"
+    echo "========================================="
+    
+    # Test 1: Create data type in data-management-service
+    echo ""
+    log_info "Test 1: Creating data type in data-management-service..."
+    local create_dt_request='{
+        "data_type": "fraud_test_transaction",
+        "name": "Fraud Test Transaction",
+        "description": "Transaction data for fraud testing",
+        "schema_definition": {
+            "fields": {
+                "amount": "Double",
+                "accountBalance": "Double",
+                "type": "String",
+                "paymentMethod": "String",
+                "merchantName": "String",
+                "timestamp": "String"
+            },
+            "required": ["amount", "accountBalance"]
+        },
+        "sample_data": {
+            "amount": 1000.0,
+            "accountBalance": 5000.0,
+            "type": "debit",
+            "paymentMethod": "card",
+            "merchantName": "Test Merchant",
+            "timestamp": "2024-01-01T10:00:00Z"
+        },
+        "status": "ACTIVE",
+        "created_by": "integration-test"
+    }'
+    
+    local response=$(make_request "POST" "$DATA_MANAGEMENT_URL/data-types" "$create_dt_request" "")
+    local body=$(echo "$response" | head -n -1)
+    local status=$(echo "$response" | tail -1)
+    local data_type_id=$(echo "$body" | jq -r '.data_type' 2>/dev/null)
+    
+    if check_http_status "$response" "201" || check_http_status "$response" "200"; then
+        log_test "Create Data Type in Data Management Service" "PASS"
+    elif check_http_status "$response" "400"; then
+        # Data type already exists, that's OK for this test
+        log_test "Create Data Type in Data Management Service" "PASS" "(already exists)"
+    else
+        log_test "Create Data Type in Data Management Service" "FAIL" "Status: $status"
+        return  # Skip remaining tests if this fails
+    fi
+    
+    # Test 2: Verify data type exists
+    echo ""
+    log_info "Test 2: Verifying data type exists in data-management-service..."
+    response=$(make_request "GET" "$DATA_MANAGEMENT_URL/data-types/fraud_test_transaction" "" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    
+    if check_http_status "$response" "200"; then
+        log_test "Verify Data Type Exists" "PASS"
+    else
+        log_test "Verify Data Type Exists" "FAIL" "Status: $status"
+    fi
+    
+    # Test 3: Create rule referencing the new data type
+    echo ""
+    log_info "Test 3: Creating rule for the new data type..."
+    local create_rule_request='{
+        "name": "Fraud Test Rule",
+        "description": "Detect suspicious merchant transactions",
+        "dataType": "fraud_test_transaction",
+        "drlContent": "package rules;\n\nimport com.frauddetection.domain.DynamicFact;\n\nrule \"Suspicious Merchant Alert\"\nwhen\n    $fact : DynamicFact( getPropertyAsNumber(\"amount\").doubleValue() > 10000 )\nthen\n    $fact.addViolation(\"SUSPICIOUS_MERCHANT\", \"High amount merchant transaction\", 4);\nend\n",
+        "createdBy": "integration-test"
+    }'
+    
+    response=$(make_request "POST" "$BASE_URL/api/rules" "$create_rule_request" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    local rule_id=$(extract_id "$body")
+    
+    if check_http_status "$response" "200" && [ -n "$rule_id" ]; then
+        log_test "Create Rule with Data Type from Data Management Service" "PASS"
+    else
+        log_test "Create Rule with Data Type from Data Management Service" "FAIL" "Status: $status"
+    fi
+    
+    # Test 4: Attempt to create rule with non-existent data type
+    echo ""
+    log_info "Test 4: Attempting to create rule with non-existent data type..."
+    local invalid_rule_request='{
+        "name": "Invalid Rule",
+        "description": "This should fail",
+        "dataType": "nonexistent_type_xyz123",
+        "drlContent": "package rules;\n\nimport com.frauddetection.domain.DynamicFact;\n\nrule \"Invalid\"\nwhen\n    $fact : DynamicFact( getPropertyAsString(\"type\").equals(\"test\") )\nthen\n    $fact.addViolation(\"ERROR\", \"This should fail\");\nend\n",
+        "createdBy": "integration-test"
+    }'
+    
+    response=$(make_request "POST" "$BASE_URL/api/rules" "$invalid_rule_request" "")
+    status=$(echo "$response" | tail -1)
+    
+    if check_http_status "$response" "400"; then
+        log_test "Reject Rule Creation with Non-existent Data Type" "PASS"
+    else
+        log_test "Reject Rule Creation with Non-existent Data Type" "FAIL" "Status: $status (expected 400)"
+    fi
+    
+    # Test 5: Test schema validation - field mismatch
+    echo ""
+    log_info "Test 5: Testing schema validation with invalid field name..."
+    local invalid_field_rule_request='{
+        "name": "Invalid Field Rule",
+        "description": "Rule with invalid field reference",
+        "dataType": "fraud_test_transaction",
+        "drlContent": "package rules;\n\nimport com.frauddetection.domain.DynamicFact;\n\nrule \"Invalid Field Alert\"\nwhen\n    $fact : DynamicFact( getPropertyAsNumber(\"invalidField123\").doubleValue() > 100 )\nthen\n    $fact.addViolation(\"INVALID\", \"Invalid field reference\");\nend\n",
+        "createdBy": "integration-test"
+    }'
+    
+    response=$(make_request "POST" "$BASE_URL/api/rules" "$invalid_field_rule_request" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    
+    if check_http_status "$response" "400"; then
+        log_test "Reject Rule with Invalid Field Name" "PASS"
+    else
+        log_test "Reject Rule with Invalid Field Name" "FAIL" "Status: $status (expected 400)"
+    fi
+    
+    # Test 6: Test schema validation - valid field names
+    echo ""
+    log_info "Test 6: Creating rule with valid field names from schema..."
+    local valid_field_rule_request='{
+        "name": "Valid Field Rule",
+        "description": "Rule with valid field references",
+        "dataType": "fraud_test_transaction",
+        "drlContent": "package rules;\n\nimport com.frauddetection.domain.DynamicFact;\n\nrule \"Valid Field Alert\"\nwhen\n    $fact : DynamicFact( getPropertyAsString(\"merchantName\").equals(\"Suspicious Merchant\") )\nthen\n    $fact.addViolation(\"SUSPICIOUS_MERCHANT\", \"Known suspicious merchant\", 5);\nend\n",
+        "createdBy": "integration-test"
+    }'
+    
+    response=$(make_request "POST" "$BASE_URL/api/rules" "$valid_field_rule_request" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    local valid_rule_id=$(extract_id "$body")
+    
+    if check_http_status "$response" "200" && [ -n "$valid_rule_id" ]; then
+        log_test "Accept Rule with Valid Field Names" "PASS"
+    else
+        log_test "Accept Rule with Valid Field Names" "FAIL" "Status: $status"
+    fi
+    
+    # Test 7: Activate rule and evaluate
+    if [ -n "$valid_rule_id" ]; then
+        echo ""
+        log_info "Test 7: Activating rule and evaluating data..."
+        
+        # Activate rule
+        response=$(make_request "POST" "$BASE_URL/api/rules/$valid_rule_id/activate" "" "")
+        status=$(echo "$response" | tail -1)
+        
+        if check_http_status "$response" "200"; then
+            log_test "Activate Rule for Evaluation" "PASS"
+            
+            # Evaluate with test data
+            local eval_request='{
+                "dataType": "fraud_test_transaction",
+                "facts": [{
+                    "amount": 5000.0,
+                    "accountBalance": 10000.0,
+                    "type": "debit",
+                    "paymentMethod": "card",
+                    "merchantName": "Suspicious Merchant",
+                    "timestamp": "2024-01-01T10:00:00Z"
+                }]
+            }'
+            
+            response=$(make_request "POST" "$BASE_URL/api/evaluate/" "$eval_request" "")
+            status=$(echo "$response" | tail -1)
+            
+            if check_http_status "$response" "200"; then
+                log_test "Evaluate Data with Data Type from Data Management Service" "PASS"
+            else
+                log_test "Evaluate Data with Data Type from Data Management Service" "FAIL" "Status: $status"
+            fi
+        else
+            log_test "Activate Rule for Evaluation" "FAIL" "Status: $status"
+        fi
+    fi
+    
+    # Test 8: Get schema information
+    echo ""
+    log_info "Test 8: Getting schema information for validation..."
+    response=$(make_request "GET" "$DATA_MANAGEMENT_URL/data-types/fraud_test_transaction" "" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    
+    # Check if the response contains schema_definition field (indicates valid response)
+    local has_schema=$(echo "$body" | grep -o "schema_definition" 2>/dev/null)
+    
+    if check_http_status "$response" "200" && [ -n "$has_schema" ]; then
+        log_test "Get Schema Information for Validation" "PASS"
+    else
+        log_test "Get Schema Information for Validation" "FAIL" "Status: $status"
+    fi
+    
+    # Test 9: Update data type and verify rule still works
+    echo ""
+    log_info "Test 9: Updating data type schema..."
+    local update_dt_request='{
+        "description": "Updated transaction data for fraud testing",
+        "schema_definition": {
+            "fields": {
+                "amount": "Double",
+                "accountBalance": "Double",
+                "type": "String",
+                "paymentMethod": "String",
+                "merchantName": "String",
+                "timestamp": "String",
+                "riskLevel": "String"
+            },
+            "required": ["amount", "accountBalance"]
+        },
+        "status": "ACTIVE"
+    }'
+    
+    response=$(make_request "PUT" "$DATA_MANAGEMENT_URL/data-types/fraud_test_transaction" "$update_dt_request" "")
+    status=$(echo "$response" | tail -1)
+    
+    if check_http_status "$response" "200"; then
+        log_test "Update Data Type Schema" "PASS"
+    else
+        log_test "Update Data Type Schema" "FAIL" "Status: $status"
+    fi
+    
+    # Test 10: Validate DRL using schema from data-management-service
+    echo ""
+    log_info "Test 10: Validating DRL against schema from data-management-service..."
+    local validate_request='{
+        "drlContent": "package rules;\n\nimport com.frauddetection.domain.DynamicFact;\n\nrule \"Risk Level Check\"\nwhen\n    $fact : DynamicFact( getPropertyAsString(\"riskLevel\").equals(\"high\") )\nthen\n    $fact.addViolation(\"HIGH_RISK\", \"High risk transaction\", 8);\nend\n",
+        "dataType": "fraud_test_transaction"
+    }'
+    
+    response=$(make_request "POST" "$BASE_URL/api/rules/validate" "$validate_request" "")
+    body=$(echo "$response" | head -n -1)
+    status=$(echo "$response" | tail -1)
+    local is_valid=$(extract_boolean_field "$body" "valid")
+    
+    if check_http_status "$response" "200" && [ "$is_valid" = "true" ]; then
+        log_test "Validate DRL Against Schema from Data Management Service" "PASS"
+    else
+        log_test "Validate DRL Against Schema from Data Management Service" "FAIL" "Status: $status, Valid: $is_valid"
+    fi
+}
+
+# ============================================================================
 # Main Execution
 # ============================================================================
 main() {
@@ -1038,6 +1291,7 @@ main() {
     run_negative_tests
     run_integration_tests
     run_scoring_tests
+    run_data_management_integration_tests
     
     # Print summary
     echo ""

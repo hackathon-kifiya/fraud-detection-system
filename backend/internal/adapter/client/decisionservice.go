@@ -41,6 +41,7 @@ type DecisionRequest struct {
 	RuleEngineScore       float64 `json:"rule_engine_score"`
 	AnomalyDetectionScore float64 `json:"anomaly_detection_score"`
 	PredictiveEngineScore float64 `json:"predictive_engine_score"`
+	DataType              string  `json:"data_type,omitempty"`
 }
 
 // ScoreBreakdown represents the breakdown of scores by engine
@@ -147,12 +148,13 @@ func (c *DecisionServiceClient) UpdateConfig(config DecisionConfigModel) (*Decis
 }
 
 // MakeDecision makes a decision based on scores from multiple engines
-func (c *DecisionServiceClient) MakeDecision(entityID string, ruleEngineScore, anomalyDetectionScore, predictiveEngineScore float64) (*DecisionResponse, error) {
+func (c *DecisionServiceClient) MakeDecision(entityID string, ruleEngineScore, anomalyDetectionScore, predictiveEngineScore float64, dataType string) (*DecisionResponse, error) {
 	req := DecisionRequest{
 		EntityID:              entityID,
 		RuleEngineScore:       ruleEngineScore,
 		AnomalyDetectionScore: anomalyDetectionScore,
 		PredictiveEngineScore: predictiveEngineScore,
+		DataType:              dataType,
 	}
 	return c.decide("/decide", req)
 }
@@ -189,6 +191,147 @@ func (c *DecisionServiceClient) decide(endpoint string, req DecisionRequest) (*D
 	}
 
 	return &response, nil
+}
+
+// MergedDataTypeConfig represents merged configuration for a data type
+type MergedDataTypeConfig struct {
+	DataType         string              `json:"data_type"`
+	Config           DecisionConfigModel `json:"config"`
+	IsCustom         bool                `json:"is_custom"`
+	OverriddenFields []string            `json:"overridden_fields"`
+}
+
+// DataTypeDecisionConfig represents data-type-specific config overrides
+type DataTypeDecisionConfig struct {
+	DataType               string   `json:"data_type"`
+	AutoApproveThreshold   *float64 `json:"auto_approve_threshold,omitempty"`
+	AutoRejectThreshold    *float64 `json:"auto_reject_threshold,omitempty"`
+	RuleEngineWeight       *float64 `json:"rule_engine_weight,omitempty"`
+	AnomalyDetectionWeight *float64 `json:"anomaly_detection_weight,omitempty"`
+	PredictiveEngineWeight *float64 `json:"predictive_engine_weight,omitempty"`
+	ModelBasedScoring      *bool    `json:"model_based_scoring,omitempty"`
+	ModelBasedThresholds   *bool    `json:"model_based_thresholds,omitempty"`
+}
+
+// GetDataTypeConfig retrieves merged configuration for a specific data type
+func (c *DecisionServiceClient) GetDataTypeConfig(dataType string) (*MergedDataTypeConfig, error) {
+	url := fmt.Sprintf("%s/config/data-types/%s", c.baseURL, dataType)
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("decision service returned status %d", resp.StatusCode)
+	}
+
+	var config MergedDataTypeConfig
+	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &config, nil
+}
+
+// UpdateDataTypeConfig updates data-type-specific configuration
+func (c *DecisionServiceClient) UpdateDataTypeConfig(dataType string, config DataTypeDecisionConfig) (*DataTypeDecisionConfig, error) {
+	url := fmt.Sprintf("%s/config/data-types/%s", c.baseURL, dataType)
+
+	jsonData, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("decision service returned status %d", resp.StatusCode)
+	}
+
+	var result DataTypeDecisionConfig
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetAllDataTypeConfigs retrieves all data types with custom configs
+func (c *DecisionServiceClient) GetAllDataTypeConfigs() ([]string, error) {
+	url := c.baseURL + "/config/data-types"
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("decision service returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		DataTypes []map[string]string `json:"data_types"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	dataTypes := make([]string, len(result.DataTypes))
+	for i, dt := range result.DataTypes {
+		dataTypes[i] = dt["data_type"]
+	}
+
+	return dataTypes, nil
+}
+
+// DeleteDataTypeConfig deletes data-type-specific configuration
+func (c *DecisionServiceClient) DeleteDataTypeConfig(dataType string) error {
+	url := fmt.Sprintf("%s/config/data-types/%s", c.baseURL, dataType)
+
+	httpReq, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("decision service returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // HealthCheck checks if the decision service is healthy

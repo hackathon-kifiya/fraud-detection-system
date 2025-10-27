@@ -23,7 +23,7 @@ func (Callback) TableName() string {
 
 // CreateCallbackRequest represents the request to create a callback
 type CreateCallbackRequest struct {
-	DataType    string `json:"data_type" binding:"required,oneof=transactions loan_requests credit_history kyc repayments flagged_items"`
+	DataType    string `json:"data_type" binding:"required"`
 	CallbackURL string `json:"callback_url" binding:"required,url"`
 	Method      string `json:"method" binding:"required,oneof=POST PUT PATCH"`
 	Headers     string `json:"headers"`
@@ -32,7 +32,7 @@ type CreateCallbackRequest struct {
 
 // UpdateCallbackRequest represents the request to update a callback
 type UpdateCallbackRequest struct {
-	DataType    *string `json:"data_type,omitempty" binding:"omitempty,oneof=transactions loan_requests credit_history kyc repayments flagged_items"`
+	DataType    *string `json:"data_type,omitempty"`
 	CallbackURL *string `json:"callback_url,omitempty" binding:"omitempty,url"`
 	Method      *string `json:"method,omitempty" binding:"omitempty,oneof=POST PUT PATCH"`
 	Headers     *string `json:"headers,omitempty"`

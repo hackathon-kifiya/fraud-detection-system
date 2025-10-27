@@ -220,11 +220,11 @@ const AuditorManagementPage = ({ onShowSnackbar }) => {
       )}
 
       {/* Summary Stats */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ borderRadius: 2, boxShadow: 1, height: '100%' }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <Box
                   sx={{
                     p: 1,
@@ -236,20 +236,20 @@ const AuditorManagementPage = ({ onShowSnackbar }) => {
                 >
                   <AssignmentIcon sx={{ fontSize: 24 }} />
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
                   Total Auditors
                 </Typography>
               </Box>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#1976d2', fontSize: '2.5rem' }}>
                 {auditors.length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ borderRadius: 2, boxShadow: 1, height: '100%' }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <Box
                   sx={{
                     p: 1,
@@ -261,20 +261,20 @@ const AuditorManagementPage = ({ onShowSnackbar }) => {
                 >
                   <AssignmentIcon sx={{ fontSize: 24 }} />
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
                   Active Auditors
                 </Typography>
               </Box>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#7b1fa2' }}>
+              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#7b1fa2', fontSize: '2.5rem' }}>
                 {auditors.filter(a => a.is_active).length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ borderRadius: 2, boxShadow: 1, height: '100%' }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <Box
                   sx={{
                     p: 1,
@@ -286,11 +286,11 @@ const AuditorManagementPage = ({ onShowSnackbar }) => {
                 >
                   <AssignmentIcon sx={{ fontSize: 24 }} />
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
                   Total Cases
                 </Typography>
               </Box>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#f57c00' }}>
+              <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#f57c00', fontSize: '2.5rem' }}>
                 {Object.values(auditorStats).reduce((sum, stat) => sum + (stat.totalCases || 0), 0)}
               </Typography>
             </CardContent>

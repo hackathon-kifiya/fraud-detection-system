@@ -41,34 +41,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
-    @ExceptionHandler(DataTypeNotFoundException.class)
-    public ResponseEntity<ErrorResponseDto> handleDataTypeNotFoundException(
-            DataTypeNotFoundException ex, 
-            HttpServletRequest request) {
-        ErrorResponseDto errorResponse = ErrorResponseDto.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.NOT_FOUND.value())
-                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
-                .message(ex.getMessage())
-                .path(request.getRequestURI())
-                .build();
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
-    }
-
-    @ExceptionHandler(DuplicateDataTypeException.class)
-    public ResponseEntity<ErrorResponseDto> handleDuplicateDataTypeException(
-            DuplicateDataTypeException ex, 
-            HttpServletRequest request) {
-        ErrorResponseDto errorResponse = ErrorResponseDto.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.CONFLICT.value())
-                .error(HttpStatus.CONFLICT.getReasonPhrase())
-                .message(ex.getMessage())
-                .path(request.getRequestURI())
-                .build();
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
-    }
-
     @ExceptionHandler(RuleExecutionException.class)
     public ResponseEntity<ErrorResponseDto> handleRuleExecutionException(
             RuleExecutionException ex, 

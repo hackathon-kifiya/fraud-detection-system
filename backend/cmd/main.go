@@ -11,7 +11,6 @@ import (
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/database"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/repository"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/api/handler"
-	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/port"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/service"
 	"gorm.io/gorm"
 )
@@ -84,19 +83,7 @@ func main() {
 	anomalyDetectionClient := client.NewAnomalyDetectionEngineClient(cfg.AnomalyDetectionEngineURL)
 	predictiveEngineClient := client.NewPredictiveEngineClient(cfg.PredictiveEngineURL)
 	decisionServiceClient := client.NewDecisionServiceClient(cfg.DecisionServiceURL)
-
-	// Initialize data management service client for reading data types
-	var dataManagementClient *client.DataManagementClient
-	var dataTypeRepo port.DataTypeRepository
-	if cfg.DataManagementServiceURL != "" {
-		dataManagementClient = client.NewDataManagementClient(cfg.DataManagementServiceURL)
-		dataTypeRepo = client.NewDataTypeRepositoryAdapter(dataManagementClient)
-		log.Printf("Data types will be fetched from Data Management Service: %s", cfg.DataManagementServiceURL)
-	} else {
-		log.Println("Data Management service URL not provided - data type operations will fail")
-		// Fallback to database (deprecated)
-		dataTypeRepo = repository.NewDataTypeRepository(db)
-	}
+	dataManagementClient := client.NewDataManagementClient(cfg.DataManagementServiceURL)
 
 	// Initialize clients (for future use)
 	_ = anomalyDetectionClient
@@ -108,12 +95,11 @@ func main() {
 
 	jwtSecret := "your-secret-key"
 	userService := service.NewUserService(userRepo, jwtSecret)
-	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo)
+	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo, dataManagementClient)
 	// ruleEvaluationService := service.NewRuleEvaluationService(ruleEngineClient, flaggedItemRepo, flaggedItemService)
 	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
 	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
-	callbackService := service.NewCallbackService(callbackRepo)
-	dataTypeService := service.NewDataTypeService(dataTypeRepo)
+	callbackService := service.NewCallbackService(callbackRepo, dataManagementClient)
 
 	// Initialize router with CORS configuration
 	routerCfg := &router.RouterConfig{
@@ -136,7 +122,6 @@ func main() {
 	handler.InitAdminHandler(adminService, r)
 	handler.InitCallbackHandler(callbackService, r)
 	handler.InitDecisionHandler(decisionServiceClient, r)
-	handler.InitDataTypeHandler(dataTypeService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

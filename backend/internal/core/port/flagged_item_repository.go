@@ -26,6 +26,9 @@ type FlaggedItemRepository interface {
 	// GetStats retrieves statistics about flagged items
 	GetStats(ctx context.Context) (*domain.FlaggedItemStats, error)
 
+	// GetStatsWithTypes retrieves statistics about flagged items with dynamic data types
+	GetStatsWithTypes(ctx context.Context, dataTypes []string) (*domain.FlaggedItemStats, error)
+
 	// GetByType retrieves flagged items by type
 	GetByType(ctx context.Context, itemType string, limit, offset int) ([]domain.FlaggedItem, int64, error)
 

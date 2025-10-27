@@ -184,8 +184,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
     switch (status) {
       case "ACTIVE":
         return "success";
-      case "DRAFT":
-        return "warning";
       case "INACTIVE":
         return "error";
       default:
@@ -197,8 +195,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
     switch (status) {
       case "ACTIVE":
         return <ActiveIcon />;
-      case "DRAFT":
-        return <EditIcon />;
       case "INACTIVE":
         return <InactiveIcon />;
       default:
@@ -300,16 +296,16 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
           <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
             <CardContent>
               <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <EditIcon sx={{ fontSize: 24, color: "#ff9800", mr: 1 }} />
+                <InactiveIcon sx={{ fontSize: 24, color: "#f44336", mr: 1 }} />
                 <Typography variant='h6' sx={{ fontWeight: "bold" }}>
-                  Draft Rules
+                  Inactive Rules
                 </Typography>
               </Box>
               <Typography
                 variant='h4'
-                sx={{ fontWeight: "bold", color: "#ff9800" }}
+                sx={{ fontWeight: "bold", color: "#f44336" }}
               >
-                {rules.filter((r) => r.status === "DRAFT").length}
+                {rules.filter((r) => r.status === "INACTIVE").length}
               </Typography>
             </CardContent>
           </Card>
@@ -369,7 +365,6 @@ const RuleManagementPage = ({ onShowSnackbar }) => {
             >
               <MenuItem value=''>All Status</MenuItem>
               <MenuItem value='ACTIVE'>Active</MenuItem>
-              <MenuItem value='DRAFT'>Draft</MenuItem>
               <MenuItem value='INACTIVE'>Inactive</MenuItem>
             </Select>
           </FormControl>

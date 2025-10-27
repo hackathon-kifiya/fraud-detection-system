@@ -65,12 +65,12 @@ type UpdateFlaggedItemRequest struct {
 
 // FlaggedItemStats represents statistics about flagged items
 type FlaggedItemStats struct {
-	TotalFlagged   int64            `json:"total_flagged"`
-	PendingReview  int64            `json:"pending_review"`
-	ConfirmedFraud int64            `json:"confirmed_fraud"`
-	FalsePositives int64            `json:"false_positives"`
-	FlaggedByType  map[string]int64 `json:"flagged_by_type"`
-	HighRiskCount  int64            `json:"high_risk_count"`
+	TotalFlagged   int64            `json:"totalFlagged"`
+	PendingReview  int64            `json:"pendingReview"`
+	ConfirmedFraud int64            `json:"confirmedFraud"`
+	VerifiedSafe   int64            `json:"verifiedSafe"`
+	FlaggedByType  map[string]int64 `json:"flaggedByType"`
+	HighRiskCount  int64            `json:"highRiskCount"`
 }
 
 // FlaggedItemListResponse represents the response for listing flagged items

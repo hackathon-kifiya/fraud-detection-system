@@ -50,7 +50,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&domain.PerformanceReport{},
 		&domain.KPIMetrics{},
 		&domain.Callback{},
-		&domain.DataType{},
 	)
 
 	if err != nil {

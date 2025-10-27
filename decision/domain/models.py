@@ -34,6 +34,7 @@ class DecisionRequest(BaseModel):
     rule_engine_score: float = Field(..., ge=0, le=1, description="Rule engine normalized score (0-1)")
     anomaly_detection_score: float = Field(..., ge=0, le=1, description="Anomaly detection normalized score (0-1)")
     predictive_engine_score: float = Field(..., ge=0, le=1, description="Predictive engine normalized score (0-1)")
+    data_type: str = Field(None, description="Optional data type for type-specific configuration")
 
 
 class DecisionResult(BaseModel):
@@ -44,6 +45,28 @@ class DecisionResult(BaseModel):
     decision: str
     breakdown: dict
     confidence: float
+
+
+class DataTypeDecisionConfig(BaseModel):
+    """Model for data-type-specific decision configuration."""
+    data_type: str
+    auto_approve_threshold: float = Field(None, ge=0, le=100, description="Override for auto approve threshold")
+    auto_reject_threshold: float = Field(None, ge=0, le=100, description="Override for auto reject threshold")
+    rule_engine_weight: float = Field(None, ge=0, le=100, description="Override for rule engine weight")
+    anomaly_detection_weight: float = Field(None, ge=0, le=100, description="Override for anomaly detection weight")
+    predictive_engine_weight: float = Field(None, ge=0, le=100, description="Override for predictive engine weight")
+    model_based_scoring: bool = Field(None, description="Override for model-based scoring")
+    model_based_thresholds: bool = Field(None, description="Override for model-based thresholds")
+    created_at: datetime = Field(None, description="Creation timestamp")
+    updated_at: datetime = Field(None, description="Last update timestamp")
+
+
+class MergedDataTypeConfig(BaseModel):
+    """Model for merged configuration (defaults + overrides)."""
+    data_type: str
+    config: DecisionConfigModel
+    is_custom: bool = Field(description="Whether this data type has custom overrides")
+    overridden_fields: list = Field(default_factory=list, description="List of fields that are overridden")
 
 
 class DecisionType:

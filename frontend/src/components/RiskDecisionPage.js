@@ -59,32 +59,97 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
     predictiveModel: 25,
   });
 
+  // New state for data type management
+  const [dataTypes, setDataTypes] = useState([]);
+  const [selectedDataType, setSelectedDataType] = useState("system_default");
+  const [isCustomConfig, setIsCustomConfig] = useState(false);
+  const [overriddenFields, setOverriddenFields] = useState([]);
+
+  const loadDataTypes = async () => {
+    try {
+      const response = await decisionServiceAPI.getDataTypes();
+      setDataTypes(response.data || []);
+    } catch (error) {
+      console.error("Error loading data types:", error);
+      onShowSnackbar("Failed to load data types", "error");
+    }
+  };
+
   const loadRiskParameters = async () => {
     try {
       setLoading(true);
-      const response = await decisionServiceAPI.getConfig();
-      const config = response.data;
       
-      setRiskParams({
-        autoRejectThreshold: config.auto_reject_threshold,
-        autoApproveThreshold: config.auto_approve_threshold,
-        humanReviewMin: config.auto_approve_threshold,
-        humanReviewMax: config.auto_reject_threshold,
-      });
-      
-      setEngineWeights({
-        ruleEngine: config.rule_engine_weight,
-        anomalyDetection: config.anomaly_detection_weight,
-        predictiveModel: config.predictive_engine_weight,
-      });
-      
-      setIsModelBased(config.model_based_scoring);
-      setIsThresholdModelBased(config.model_based_thresholds);
+      if (selectedDataType === "system_default") {
+        // Load system default configuration
+        const response = await decisionServiceAPI.getConfig();
+        const config = response.data;
+        
+        setRiskParams({
+          autoRejectThreshold: config.auto_reject_threshold,
+          autoApproveThreshold: config.auto_approve_threshold,
+          humanReviewMin: config.auto_approve_threshold,
+          humanReviewMax: config.auto_reject_threshold,
+        });
+        
+        setEngineWeights({
+          ruleEngine: config.rule_engine_weight,
+          anomalyDetection: config.anomaly_detection_weight,
+          predictiveModel: config.predictive_engine_weight,
+        });
+        
+        setIsModelBased(config.model_based_scoring);
+        setIsThresholdModelBased(config.model_based_thresholds);
+        setIsCustomConfig(false);
+        setOverriddenFields([]);
+      } else {
+        // Load data-type-specific configuration
+        const response = await decisionServiceAPI.getDataTypeConfig(selectedDataType);
+        const mergedConfig = response.data;
+        const config = mergedConfig.config;
+        
+        setRiskParams({
+          autoRejectThreshold: config.auto_reject_threshold,
+          autoApproveThreshold: config.auto_approve_threshold,
+          humanReviewMin: config.auto_approve_threshold,
+          humanReviewMax: config.auto_reject_threshold,
+        });
+        
+        setEngineWeights({
+          ruleEngine: config.rule_engine_weight,
+          anomalyDetection: config.anomaly_detection_weight,
+          predictiveModel: config.predictive_engine_weight,
+        });
+        
+        setIsModelBased(config.model_based_scoring);
+        setIsThresholdModelBased(config.model_based_thresholds);
+        setIsCustomConfig(mergedConfig.is_custom);
+        setOverriddenFields(mergedConfig.overridden_fields || []);
+      }
     } catch (error) {
       onShowSnackbar("Failed to load risk parameters", "error");
       console.error("Error loading config:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDataTypeChange = (event) => {
+    setSelectedDataType(event.target.value);
+  };
+
+  const handleResetToDefaults = async () => {
+    if (selectedDataType === "system_default") {
+      onShowSnackbar("Cannot reset system defaults", "warning");
+      return;
+    }
+
+    try {
+      await decisionServiceAPI.deleteDataTypeConfig(selectedDataType);
+      onShowSnackbar(`Configuration for ${selectedDataType} reset to defaults`, "success");
+      loadRiskParameters();
+    } catch (error) {
+      console.error("Error resetting config:", error);
+      onShowSnackbar("Failed to reset configuration", "error");
     }
   };
 
@@ -137,23 +202,41 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
     try {
       setSaving(true);
 
-      const configData = {
-        model_based_thresholds: isThresholdModelBased,
-        auto_approve_threshold: riskParams.autoApproveThreshold,
-        auto_reject_threshold: riskParams.autoRejectThreshold,
-        model_based_scoring: isModelBased,
-        rule_engine_weight: engineWeights.ruleEngine,
-        anomaly_detection_weight: engineWeights.anomalyDetection,
-        predictive_engine_weight: engineWeights.predictiveModel,
-      };
+      if (selectedDataType === "system_default") {
+        // Save system default configuration
+        const configData = {
+          model_based_thresholds: isThresholdModelBased,
+          auto_approve_threshold: riskParams.autoApproveThreshold,
+          auto_reject_threshold: riskParams.autoRejectThreshold,
+          model_based_scoring: isModelBased,
+          rule_engine_weight: engineWeights.ruleEngine,
+          anomaly_detection_weight: engineWeights.anomalyDetection,
+          predictive_engine_weight: engineWeights.predictiveModel,
+        };
 
-      await decisionServiceAPI.updateConfig(configData);
+        await decisionServiceAPI.updateConfig(configData);
+      } else {
+        // Save data-type-specific configuration overrides
+        const configData = {
+          data_type: selectedDataType,
+          auto_approve_threshold: riskParams.autoApproveThreshold,
+          auto_reject_threshold: riskParams.autoRejectThreshold,
+          rule_engine_weight: engineWeights.ruleEngine,
+          anomaly_detection_weight: engineWeights.anomalyDetection,
+          predictive_engine_weight: engineWeights.predictiveModel,
+          model_based_scoring: isModelBased,
+          model_based_thresholds: isThresholdModelBased,
+        };
 
-      const message = isModelBased
-        ? `Risk decision parameters saved successfully with ${selectedModel} model`
-        : "Risk decision parameters saved successfully with linear scoring";
+        await decisionServiceAPI.updateDataTypeConfig(selectedDataType, configData);
+      }
+
+      const message = selectedDataType === "system_default"
+        ? "System default configuration saved successfully"
+        : `Configuration for ${selectedDataType} saved successfully`;
 
       onShowSnackbar(message, "success");
+      loadRiskParameters(); // Reload to get updated override status
     } catch (error) {
       console.error("Error saving config:", error);
       onShowSnackbar("Failed to save risk parameters: " + (error.response?.data?.detail || error.message), "error");
@@ -223,8 +306,13 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
   ];
 
   useEffect(() => {
+    loadDataTypes();
     loadRiskParameters();
   }, []);
+
+  useEffect(() => {
+    loadRiskParameters();
+  }, [selectedDataType]);
 
   return (
     <Box sx={{ maxWidth: 1400, mx: "auto", p: 3 }}>
@@ -241,6 +329,65 @@ const RiskDecisionPage = ({ onShowSnackbar }) => {
           for fraud detection.
         </Typography>
       </Box>
+
+      {/* Data Type Selector */}
+      <Card sx={{ boxShadow: 1, border: "1px solid #e0e0e0", mb: 3 }}>
+        <CardContent sx={{ p: 3 }}>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Data Type Configuration</InputLabel>
+                <Select
+                  value={selectedDataType}
+                  onChange={handleDataTypeChange}
+                  label="Data Type Configuration"
+                >
+                  <MenuItem value="system_default">
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: "1.2rem" }} />
+                      System Default (All Data Types)
+                    </Box>
+                  </MenuItem>
+                  {dataTypes.map((dt) => (
+                    <MenuItem key={dt.data_type} value={dt.data_type}>
+                      {dt.name} ({dt.data_type})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                {isCustomConfig && selectedDataType !== "system_default" && (
+                  <>
+                    <Chip
+                      label="Custom Configuration"
+                      color="primary"
+                      size="small"
+                      sx={{ fontWeight: "600" }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleResetToDefaults}
+                      startIcon={<RefreshIcon />}
+                    >
+                      Reset to Defaults
+                    </Button>
+                  </>
+                )}
+                {!isCustomConfig && selectedDataType !== "system_default" && (
+                  <Chip
+                    label="Using Default Configuration"
+                    variant="outlined"
+                    size="small"
+                  />
+                )}
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={3}>
         {/* Configuration Panel */}

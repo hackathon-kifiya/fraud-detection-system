@@ -22,10 +22,11 @@ public class SwaggerConfig {
                             Rule Engine Service for Fraud Detection System
                             
                             This service provides:
-                            - **Data Type Management**: Define schemas for different data types
                             - **Rule Management**: Create and manage Drools-based fraud detection rules
                             - **Rule Validation**: Validate DRL syntax and semantics before deployment
                             - **Rule Evaluation**: Execute rules against transaction data to calculate risk scores
+                            
+                            Note: Data type schemas are managed by the data-management-service.
                             
                             ### Key Features:
                             - Dynamic rule deployment without service restart

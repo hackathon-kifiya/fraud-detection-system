@@ -6,9 +6,8 @@ from contextlib import asynccontextmanager
 import os
 import logging
 from adapters.database.config_repository import PostgreSQLConfigRepository
-from adapters.database.data_type_repository import PostgreSQLDataTypeRepository
 from usecases.decision_service import DecisionService, ConfigService
-from adapters.api.routes import create_config_router, create_decision_router, create_data_type_router
+from adapters.api.routes import create_config_router, create_decision_router, create_data_type_config_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,18 +22,15 @@ async def lifespan(app: FastAPI):
     
     # Initialize repositories
     config_repository = PostgreSQLConfigRepository()
-    data_type_repository = PostgreSQLDataTypeRepository()
     
     # Initialize databases
     try:
         config_repository.initialize_schema()
-        data_type_repository.initialize_schema()
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
     
     # Store repository in app state for dependency injection
     app.state.config_repository = config_repository
-    app.state.data_type_repository = data_type_repository
     
     # Setup routes after repository is initialized
     setup_routes()
@@ -124,12 +120,12 @@ def setup_routes():
     # Create routers
     config_router = create_config_router(config_service, decision_service)
     decision_router = create_decision_router(decision_service)
-    data_type_router = create_data_type_router()
+    data_type_config_router = create_data_type_config_router(config_service)
     
     # Register routers
     app.include_router(config_router, tags=["configuration"])
     app.include_router(decision_router, tags=["decision"])
-    app.include_router(data_type_router, tags=["data-types"])
+    app.include_router(data_type_config_router, tags=["data-type-configuration"])
 
 
 if __name__ == "__main__":

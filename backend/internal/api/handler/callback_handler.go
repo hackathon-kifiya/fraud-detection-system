@@ -20,6 +20,7 @@ func InitCallbackHandler(svc *service.CallbackService, r *gin.Engine) {
 	protected.Use(authMiddleware())
 	{
 		protected.GET("", listCallbacksHandler)
+		protected.GET("/data-types/available", getAvailableDataTypesHandler)
 		protected.GET("/:id", getCallbackHandler)
 		protected.POST("", createCallbackHandler)
 		protected.PUT("/:id", updateCallbackHandler)
@@ -42,7 +43,7 @@ func listCallbacksHandler(c *gin.Context) {
 		"callbacks": callbacks,
 		"total":     total,
 		"limit":     limit,
-		"offset":     offset,
+		"offset":    offset,
 	})
 }
 
@@ -120,3 +121,13 @@ func deleteCallbackHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "callback deleted successfully"})
 }
 
+// getAvailableDataTypesHandler fetches available data types from data management service
+func getAvailableDataTypesHandler(c *gin.Context) {
+	dataTypes, err := callbackService.GetAvailableDataTypes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch available data types"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data_types": dataTypes})
+}

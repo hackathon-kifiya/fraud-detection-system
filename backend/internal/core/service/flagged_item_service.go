@@ -4,17 +4,22 @@ import (
 	"context"
 	"fmt"
 
+	"com.github.hackathon-kifiya.fraud-detection-system/internal/adapter/client"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/domain"
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/port"
 )
 
 type FlaggedItemService struct {
-	repo port.FlaggedItemRepository
+	repo                 port.FlaggedItemRepository
+	dataManagementClient *client.DataManagementClient
 }
 
 // NewFlaggedItemService creates a new flagged item service
-func NewFlaggedItemService(repo port.FlaggedItemRepository) *FlaggedItemService {
-	return &FlaggedItemService{repo: repo}
+func NewFlaggedItemService(repo port.FlaggedItemRepository, dataManagementClient *client.DataManagementClient) *FlaggedItemService {
+	return &FlaggedItemService{
+		repo:                 repo,
+		dataManagementClient: dataManagementClient,
+	}
 }
 
 // CreateFlaggedItem creates a new flagged item
@@ -93,7 +98,23 @@ func (s *FlaggedItemService) DeleteFlaggedItem(ctx context.Context, id string) e
 
 // GetStats retrieves statistics about flagged items
 func (s *FlaggedItemService) GetStats(ctx context.Context) (*domain.FlaggedItemStats, error) {
-	stats, err := s.repo.GetStats(ctx)
+	// Fetch active data types from data management service
+	dataTypes, err := s.dataManagementClient.GetAllDataTypes()
+	if err != nil {
+		// Fallback to empty list if data management service is unavailable
+		dataTypes = []client.DataManagementDataTypeResponse{}
+	}
+
+	// Extract data type identifiers for active types
+	var activeTypeIds []string
+	for _, dt := range dataTypes {
+		if dt.Status == "ACTIVE" {
+			activeTypeIds = append(activeTypeIds, dt.DataType)
+		}
+	}
+
+	// Get stats from repository with dynamic data types
+	stats, err := s.repo.GetStatsWithTypes(ctx, activeTypeIds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flagged item stats: %w", err)
 	}

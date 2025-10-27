@@ -1,6 +1,5 @@
 package com.frauddetection.services;
 
-import com.frauddetection.domain.DataType;
 import com.frauddetection.domain.Rule;
 import com.frauddetection.domain.ValidationResult;
 import com.frauddetection.dto.RuleRequestDto;
@@ -39,7 +38,7 @@ public class RuleManagementService {
     private RuleMapper ruleMapper;
     
     @Autowired
-    private DataTypeService dataTypeService;
+    private com.frauddetection.client.DataManagementClient dataManagementClient;
     
     public RuleResponseDto getRuleById(UUID id) {
         Rule rule = ruleRepository.findById(id)
@@ -54,10 +53,9 @@ public class RuleManagementService {
             throw new ValidationException("Data type is required for rule creation");
         }
         
-        // Check if data type exists
-        DataType dataType = dataTypeService.getDataTypeEntity(request.getDataType());
-        if (dataType == null) {
-            throw new ValidationException("Data type '" + request.getDataType() + "' does not exist. Please create it first.");
+        // Check if data type exists in data-management-service
+        if (!dataManagementClient.dataTypeExists(request.getDataType())) {
+            throw new ValidationException("Data type '" + request.getDataType() + "' does not exist. Please create it first in the data-management-service.");
         }
         
         // Validate DRL syntax and semantics
@@ -66,8 +64,8 @@ public class RuleManagementService {
             throw new ValidationException("DRL validation failed: " + String.join(", ", validation.getErrors()));
         }
         
-        // Semantic validation: validate field names against schema
-        validateSchemaSemantics(request.getDrlContent(), dataType);
+        // Semantic validation: validate field names against schema from data-management-service
+        validateSchemaSemantics(request.getDrlContent(), request.getDataType());
 
         Rule rule = ruleMapper.toEntity(request);
         // Don't set ID - let database generate it with DEFAULT uuid_generate_v4()
@@ -88,17 +86,14 @@ public class RuleManagementService {
     
     /**
      * Validates semantic aspects of the DRL against the data type schema.
-     * Extracts field names from DRL conditions and validates against schema.
+     * Fetches schema from data-management-service and validates field names.
      */
-    private void validateSchemaSemantics(String drlContent, DataType dataType) {
-        if (dataType.getSchemaDefinition() == null) {
-            return; // No schema defined, skip semantic validation
-        }
+    private void validateSchemaSemantics(String drlContent, String dataType) {
+        // Fetch schema from data-management-service
+        Map<String, Object> schemaMap = dataManagementClient.getDataTypeSchema(dataType);
         
-        // Parse schema to get field definitions
-        Map<String, Object> schemaMap = parseSchemaFromJson(dataType.getSchemaDefinition());
         if (schemaMap == null || !schemaMap.containsKey("fields")) {
-            return; // No fields defined in schema
+            return; // No schema defined or no fields in schema, skip semantic validation
         }
         
         @SuppressWarnings("unchecked")
@@ -117,7 +112,7 @@ public class RuleManagementService {
                     String.format(
                         "Field '%s' is referenced in the rule but is not defined in the data type schema for '%s'. " +
                         "Available fields: %s",
-                        field, dataType.getDataType(), fields.keySet()
+                        field, dataType, fields.keySet()
                     )
                 );
             }
@@ -125,19 +120,7 @@ public class RuleManagementService {
         
         // Optional: Validate required fields are checked in rules
         // (This can be a warning rather than an error)
-        validateRequiredFields(drlContent, schemaMap, dataType.getDataType());
-    }
-    
-    private Map<String, Object> parseSchemaFromJson(String jsonSchema) {
-        if (jsonSchema == null || jsonSchema.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return mapper.readValue(jsonSchema, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            throw new ValidationException("Invalid schema definition JSON: " + e.getMessage());
-        }
+        validateRequiredFields(drlContent, schemaMap, dataType);
     }
     
     /**
@@ -201,7 +184,7 @@ public class RuleManagementService {
             }
         }
     }
-
+    
     @Transactional
     public RuleResponseDto updateRule(UUID ruleId, RuleRequestDto request, String updatedBy) {
         // Find existing rule
@@ -401,8 +384,7 @@ public class RuleManagementService {
         
         // Validate data type exists if provided
         if (dataType != null && !dataType.trim().isEmpty()) {
-            DataType dataTypeEntity = dataTypeService.getDataTypeEntity(dataType);
-            if (dataTypeEntity == null) {
+            if (!dataManagementClient.dataTypeExists(dataType)) {
                 result.put("valid", false);
                 result.put("errors", List.of("Data type '" + dataType + "' does not exist"));
                 return result;
@@ -418,13 +400,10 @@ public class RuleManagementService {
         
         // Step 2: Semantic validation - validate field names against schema if data type is provided
         if (dataType != null && !dataType.trim().isEmpty() && syntaxValidation.isValid()) {
-            DataType dataTypeEntity = dataTypeService.getDataTypeEntity(dataType);
-            if (dataTypeEntity != null && dataTypeEntity.getSchemaDefinition() != null) {
-                try {
-                    validateSchemaSemantics(drlContent, dataTypeEntity);
-                } catch (ValidationException e) {
-                    allErrors.add(e.getMessage());
-                }
+            try {
+                validateSchemaSemantics(drlContent, dataType);
+            } catch (ValidationException e) {
+                allErrors.add(e.getMessage());
             }
         }
         

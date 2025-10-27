@@ -17,8 +17,12 @@ class DecisionService:
     
     def make_decision(self, request: DecisionRequest) -> DecisionResult:
         """Make a decision based on aggregated engine scores."""
-        # Get current configuration
-        config = self.config_repository.get_config()
+        # Get configuration - either data-type-specific or default
+        if request.data_type:
+            merged_config = self.config_repository.get_data_type_config(request.data_type)
+            config = merged_config.config
+        else:
+            config = self.config_repository.get_config()
         
         # Calculate final weighted score
         final_score = self._calculate_final_score(

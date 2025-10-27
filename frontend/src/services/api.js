@@ -9,6 +9,9 @@ const RULE_ENGINE_URL =
 const DECISION_SERVICE_URL =
   process.env.REACT_APP_DECISION_SERVICE_URL || "http://localhost:5003";
 
+const DATA_MANAGEMENT_SERVICE_URL =
+  process.env.REACT_APP_DATA_MANAGEMENT_SERVICE_URL || "http://localhost:5004";
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -27,6 +30,14 @@ const ruleEngineApi = axios.create({
 
 const decisionServiceApi = axios.create({
   baseURL: DECISION_SERVICE_URL,
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+const dataManagementServiceApi = axios.create({
+  baseURL: DATA_MANAGEMENT_SERVICE_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -174,31 +185,37 @@ export const auditAPI = {
 
   // Get audit statistics
   getAuditStats: () => api.get("/api/audit/stats"),
+
+  // Get my assignments
+  getMyAssignments: (params) => api.get("/api/audit/my-assignments", { params }),
+  
+  // Get assignment detail
+  getAssignmentDetail: (id) => api.get(`/api/audit/assignments/${id}`),
+  
+  // Update assignment status
+  updateAssignmentStatus: (id, data) => api.put(`/api/audit/assignments/${id}/status`, data),
 };
 
 // Admin endpoints
-// Data Type Management endpoints (backend API)
+// Data Type Management endpoints (data-management-service API)
 export const dataTypeAPI = {
   // Get all data types with pagination
-  getAll: (params) => api.get("/api/data-types", { params }),
+  getAll: (params) => dataManagementServiceApi.get("/data-types", { params }),
   
-  // Get single data type by ID
-  getById: (id) => api.get(`/api/data-types/${id}`),
+  // Get single data type by identifier
+  getById: (id) => dataManagementServiceApi.get(`/data-types/${id}`),
   
   // Get data type by name
-  getByName: (name) => api.get(`/api/data-types/name/${name}`),
-  
-  // Get active data types (public)
-  getActive: () => api.get("/api/data-types/active"),
-  
-  // Search data types
-  search: (query) => api.get("/api/data-types/search", { params: { q: query } }),
+  getByName: (name) => dataManagementServiceApi.get(`/data-types/${name}`),
   
   // Create data type
-  create: (data) => api.post("/api/data-types", data),
+  create: (data) => dataManagementServiceApi.post("/data-types", data),
   
   // Update data type
-  update: (id, data) => api.put(`/api/data-types/${id}`, data),
+  update: (id, data) => dataManagementServiceApi.put(`/data-types/${id}`, data),
+  
+  // Delete data type
+  delete: (id) => dataManagementServiceApi.delete(`/data-types/${id}`),
 };
 
 export const adminAPI = {
@@ -277,6 +294,7 @@ export const callbackAPI = {
   create: (data) => api.post("/api/callbacks", data),
   update: (id, data) => api.put(`/api/callbacks/${id}`, data),
   delete: (id) => api.delete(`/api/callbacks/${id}`),
+  getAvailableDataTypes: () => dataManagementServiceApi.get("/data-types"),
 };
 
 // Rule Engine endpoints
@@ -302,9 +320,9 @@ export const ruleEngineAPI = {
   getLoanTemplate: () => ruleEngineApi.get("/api/rules/templates/loan"),
   getTemplate: () => ruleEngineApi.get("/api/rules/example/template"),
 
-  // Data Type Management (Rule Engine)
-  getAllDataTypes: () => ruleEngineApi.get("/api/data-types"),
-  getSampleData: (dataType, limit) => ruleEngineApi.get(`/api/data-types/${dataType}/sample-data`, { params: { limit } }),
+  // Data Type Management (fetched from data-management-service)
+  getAllDataTypes: () => dataManagementServiceApi.get("/data-types"),
+  getSampleData: (dataType, limit) => dataManagementServiceApi.get(`/data-types/${dataType}/sample-data`, { params: { limit } }),
 
   // Rule evaluation
   evaluateGeneric: (dataType, facts) =>
@@ -316,6 +334,13 @@ export const decisionServiceAPI = {
   // Configuration
   getConfig: () => decisionServiceApi.get("/config"),
   updateConfig: (data) => decisionServiceApi.post("/config", data),
+  
+  // Data-type-specific configuration
+  getDataTypes: () => dataManagementServiceApi.get("/data-types"),
+  getAllDataTypeConfigs: () => decisionServiceApi.get("/config/data-types"),
+  getDataTypeConfig: (dataType) => decisionServiceApi.get(`/config/data-types/${dataType}`),
+  updateDataTypeConfig: (dataType, data) => decisionServiceApi.post(`/config/data-types/${dataType}`, data),
+  deleteDataTypeConfig: (dataType) => decisionServiceApi.delete(`/config/data-types/${dataType}`),
   
   // Decision making
   makeDecision: (data) => decisionServiceApi.post("/decide", data),

@@ -78,8 +78,8 @@ def create_data_type_router(service: DataTypeService) -> APIRouter:
         tags=["data-types"]
     )
     async def update_data_type(
-        data_type: str = Path(..., description="Data type identifier"),
-        request: UpdateDataTypeRequest = None
+        request: UpdateDataTypeRequest,
+        data_type: str = Path(..., description="Data type identifier")
     ):
         """Update a data type."""
         try:
@@ -113,6 +113,37 @@ def create_data_type_router(service: DataTypeService) -> APIRouter:
         except Exception as e:
             logger.error(f"Error deleting data type: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to delete data type: {str(e)}")
+    
+    @router.get(
+        "/data-types/{data_type}/sample-data",
+        summary="Get sample data for a data type",
+        description="Retrieve sample data for a specific data type",
+        tags=["data-types"]
+    )
+    async def get_sample_data(
+        data_type: str = Path(..., description="Data type identifier"),
+        limit: int = 5
+    ):
+        """Get sample data for a data type."""
+        try:
+            dt = service.get_data_type(data_type)
+            if not dt:
+                raise HTTPException(status_code=404, detail=f"Data type '{data_type}' not found")
+            
+            # Return the sample_data field from the data type
+            sample_data = dt.sample_data if dt.sample_data else []
+            
+            # If sample_data is a list, limit the results
+            if isinstance(sample_data, list):
+                return sample_data[:limit]
+            
+            # If it's a dict or other type, return as-is
+            return sample_data
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting sample data: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve sample data: {str(e)}")
     
     return router
 

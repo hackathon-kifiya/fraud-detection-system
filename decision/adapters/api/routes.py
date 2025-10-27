@@ -3,11 +3,10 @@
 from fastapi import APIRouter, HTTPException, Depends, Path
 from typing import Annotated, List
 import logging
-from domain.models import DecisionRequest, DecisionConfigModel
-from domain.data_type_models import DataTypeModel
+from domain.models import DecisionRequest, DecisionConfigModel, DataTypeDecisionConfig, MergedDataTypeConfig
 from usecases.decision_service import DecisionService, ConfigService
 from adapters.api.schemas import DecisionResponse, ConfigUpdateResponse
-from adapters.database.data_type_repository import PostgreSQLDataTypeRepository
+from adapters.client.data_management_client import DataManagementClient
 
 logger = logging.getLogger(__name__)
 
@@ -210,106 +209,91 @@ def create_decision_router(decision_service: DecisionService) -> APIRouter:
     return router
 
 
-def create_data_type_router() -> APIRouter:
-    """Create data type router."""
+def create_data_type_config_router(config_service: ConfigService) -> APIRouter:
+    """Create data-type-specific configuration router."""
     router = APIRouter()
-    repository = PostgreSQLDataTypeRepository()
-    
-    @router.post(
-        "/data-types",
-        response_model=DataTypeModel,
-        summary="Create a new data type",
-        description="Create a new data type schema in the decision service",
-        tags=["data-types"]
-    )
-    async def create_data_type(data_type: DataTypeModel):
-        """Create a new data type."""
-        try:
-            if repository.exists(data_type.data_type):
-                raise HTTPException(status_code=400, detail=f"Data type '{data_type.data_type}' already exists")
-            created = repository.create(data_type)
-            return created
-        except Exception as e:
-            logger.error(f"Error creating data type: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to create data type: {str(e)}")
+    data_mgmt_client = DataManagementClient()
     
     @router.get(
-        "/data-types",
-        response_model=List[DataTypeModel],
-        summary="Get all data types",
-        description="Retrieve all data types from the decision service",
-        tags=["data-types"]
+        "/config/data-types",
+        summary="List data types with custom configs",
+        description="Get all data types that have custom configuration overrides"
     )
-    async def get_all_data_types():
-        """Get all data types."""
+    async def list_data_type_configs():
+        """List all data types with custom configs."""
         try:
-            data_types = repository.get_all()
-            return data_types
+            configs = config_service.config_repository.get_all_data_type_configs()
+            return {"data_types": configs}
         except Exception as e:
-            logger.error(f"Error getting data types: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to retrieve data types: {str(e)}")
+            logger.error(f"Error listing data type configs: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     @router.get(
-        "/data-types/{data_type}",
-        response_model=DataTypeModel,
-        summary="Get data type by identifier",
-        description="Retrieve a specific data type by its identifier",
-        tags=["data-types"]
+        "/config/data-types/{data_type}",
+        response_model=MergedDataTypeConfig,
+        summary="Get merged config for data type",
+        description="Get configuration for a specific data type (defaults + overrides)"
     )
-    async def get_data_type(data_type: str = Path(..., description="Data type identifier")):
-        """Get a specific data type."""
+    async def get_data_type_config(data_type: str = Path(..., description="Data type identifier")):
+        """Get merged configuration for a specific data type."""
         try:
-            dt = repository.get_by_id(data_type)
+            # Verify data type exists in data-management-service
+            dt = data_mgmt_client.get_data_type(data_type)
             if not dt:
                 raise HTTPException(status_code=404, detail=f"Data type '{data_type}' not found")
-            return dt
+            
+            merged_config = config_service.config_repository.get_data_type_config(data_type)
+            return merged_config
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error getting data type: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to retrieve data type: {str(e)}")
+            logger.error(f"Error getting data type config: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
-    @router.put(
-        "/data-types/{data_type}",
-        response_model=DataTypeModel,
-        summary="Update a data type",
-        description="Update an existing data type",
-        tags=["data-types"]
+    @router.post(
+        "/config/data-types/{data_type}",
+        response_model=DataTypeDecisionConfig,
+        summary="Create/update data-type-specific config",
+        description="Create or update configuration overrides for a specific data type"
     )
-    async def update_data_type(data_type: str = Path(..., description="Data type identifier"), data_type_model: DataTypeModel = None):
-        """Update a data type."""
+    async def update_data_type_config(
+        data_type: str = Path(..., description="Data type identifier"),
+        config: DataTypeDecisionConfig = None
+    ):
+        """Create or update data-type-specific configuration."""
         try:
-            if not repository.exists(data_type):
+            # Verify data type exists in data-management-service
+            dt = data_mgmt_client.get_data_type(data_type)
+            if not dt:
                 raise HTTPException(status_code=404, detail=f"Data type '{data_type}' not found")
-            updated = repository.update(data_type, data_type_model)
-            return updated
+            
+            config.data_type = data_type
+            updated_config = config_service.config_repository.update_data_type_config(data_type, config)
+            return updated_config
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error updating data type: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to update data type: {str(e)}")
+            logger.error(f"Error updating data type config: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     @router.delete(
-        "/data-types/{data_type}",
-        summary="Delete a data type",
-        description="Delete a data type from the decision service",
-        tags=["data-types"]
+        "/config/data-types/{data_type}",
+        summary="Delete data-type-specific config",
+        description="Remove configuration overrides for a data type (revert to defaults)"
     )
-    async def delete_data_type(data_type: str = Path(..., description="Data type identifier")):
-        """Delete a data type."""
+    async def delete_data_type_config(data_type: str = Path(..., description="Data type identifier")):
+        """Delete data-type-specific configuration."""
         try:
-            if not repository.exists(data_type):
-                raise HTTPException(status_code=404, detail=f"Data type '{data_type}' not found")
-            deleted = repository.delete(data_type)
+            deleted = config_service.config_repository.delete_data_type_config(data_type)
             if deleted:
-                return {"success": True, "message": f"Data type '{data_type}' deleted successfully"}
+                return {"success": True, "message": f"Configuration for '{data_type}' reverted to defaults"}
             else:
-                raise HTTPException(status_code=500, detail="Failed to delete data type")
+                raise HTTPException(status_code=404, detail=f"No custom configuration found for '{data_type}'")
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error deleting data type: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to delete data type: {str(e)}")
+            logger.error(f"Error deleting data type config: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     return router
 

@@ -47,6 +47,7 @@ import {
   Logout as LogoutIcon,
   Person as PersonIcon,
   ExitToApp as ExitIcon,
+  Assignment,
   Assignment as CaseManagementIcon,
   Storage as RuleManagementIcon,
   Speed as RuleTestIcon,
@@ -57,6 +58,8 @@ import {
   Webhook as IntegrationSettingsIcon,
 } from "@mui/icons-material";
 import Dashboard from "./components/Dashboard";
+import AuditorDashboard from "./components/AuditorDashboard";
+import MyCasesPage from "./components/MyCasesPage";
 import TransactionsPage from "./components/TransactionsPage";
 import LoanRequestsPage from "./components/LoanRequestsPage";
 import CreditHistoryPage from "./components/CreditHistoryPage";
@@ -159,13 +162,13 @@ function AppContent({ isActiveRoute }) {
         },
         {
           key: "data-type-management",
-          label: "Data Type Management",
+          label: "Data Management",
           icon: DataTypeManagementIcon,
           path: "/data-types",
         },
         {
           key: "rule-engine",
-          label: "Rule Engine Management",
+          label: "Rule Management",
           icon: RuleManagementIcon,
           path: "/rules",
         },
@@ -209,7 +212,7 @@ function AppContent({ isActiveRoute }) {
         },
         {
           key: "integration-settings",
-          label: "Integration Settings",
+          label: "Integration",
           icon: IntegrationSettingsIcon,
           path: "/integration-settings",
         },
@@ -242,13 +245,13 @@ function AppContent({ isActiveRoute }) {
         },
         {
           key: "data-type-management",
-          label: "Data Type Management",
+          label: "Data Management",
           icon: DataTypeManagementIcon,
           path: "/data-types",
         },
         {
           key: "rule-engine",
-          label: "Rule Engine Management",
+          label: "Rule Management",
           icon: RuleManagementIcon,
           path: "/rules",
         },
@@ -292,7 +295,7 @@ function AppContent({ isActiveRoute }) {
         },
         {
           key: "integration-settings",
-          label: "Integration Settings",
+          label: "Integration",
           icon: IntegrationSettingsIcon,
           path: "/integration-settings",
         },
@@ -312,37 +315,10 @@ function AppContent({ isActiveRoute }) {
           path: "/dashboard",
         },
         {
-          key: "fraudDetection",
-          label: "Fraud Detection",
-          icon: SecurityIcon,
-          path: null,
-          subItems: [
-            {
-              key: "transactions",
-              label: "Transactions",
-              icon: TransactionsIcon,
-              path: "/transactions",
-            },
-            {
-              key: "loan-requests",
-              label: "Loan Requests",
-              icon: LoanRequestsIcon,
-              path: "/loan-requests",
-            },
-            {
-              key: "credit-history",
-              label: "Credit History",
-              icon: CreditHistoryIcon,
-              path: "/credit-history",
-            },
-            { key: "kyc", label: "KYC Data", icon: KycIcon, path: "/kyc" },
-            {
-              key: "repayments",
-              label: "Repayments",
-              icon: RepaymentsIcon,
-              path: "/repayments",
-            },
-          ],
+          key: "my-cases",
+          label: "My Cases",
+          icon: Assignment,
+          path: "/my-cases",
         },
         {
           key: "settings",
@@ -743,7 +719,17 @@ function AppContent({ isActiveRoute }) {
               <Route path='/' element={<Navigate to='/dashboard' replace />} />
               <Route
                 path='/dashboard'
-                element={<Dashboard onShowSnackbar={showSnackbar} />}
+                element={
+                  user?.role === 'analyst' ? (
+                    <AuditorDashboard onShowSnackbar={showSnackbar} />
+                  ) : (
+                    <Dashboard onShowSnackbar={showSnackbar} />
+                  )
+                }
+              />
+              <Route
+                path='/my-cases'
+                element={<MyCasesPage onShowSnackbar={showSnackbar} />}
               />
               <Route
                 path='/transactions'
