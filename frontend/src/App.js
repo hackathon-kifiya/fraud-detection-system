@@ -109,7 +109,6 @@ function AppContent({ isActiveRoute }) {
   const [openMenus, setOpenMenus] = useState({
     fraudDetection: true,
     ruleEngine: true,
-    anomalyDetectionEngine: true,
     playground: false,
   });
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
@@ -190,18 +189,6 @@ function AppContent({ isActiveRoute }) {
               icon: RuleTestIcon,
               path: "/rules/evaluate",
             },
-            {
-              key: "anomaly-test-evaluation",
-              label: "Anomaly Detection Test Evaluation",
-              icon: TestEvaluationIcon,
-              path: "/anomaly-detection/evaluate",
-            },
-            {
-              key: "predictive-modeling-test-evaluation",
-              label: "Predictive Modeling Test Evaluation",
-              icon: TestEvaluationIcon,
-              path: "/predictive-modeling/evaluate",
-            },
           ],
         },
         {
@@ -272,18 +259,6 @@ function AppContent({ isActiveRoute }) {
               label: "Rule Engine Test Evaluation",
               icon: RuleTestIcon,
               path: "/rules/evaluate",
-            },
-            {
-              key: "anomaly-test-evaluation",
-              label: "Anomaly Detection Test Evaluation",
-              icon: TestEvaluationIcon,
-              path: "/anomaly-detection/evaluate",
-            },
-            {
-              key: "predictive-modeling-test-evaluation",
-              label: "Predictive Modeling Test Evaluation",
-              icon: TestEvaluationIcon,
-              path: "/predictive-modeling/evaluate",
             },
           ],
         },
@@ -777,14 +752,6 @@ function AppContent({ isActiveRoute }) {
               />
               <Route
                 path='/rules/evaluate'
-                element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
-              />
-              <Route
-                path='/anomaly-detection/evaluate'
-                element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
-              />
-              <Route
-                path='/predictive-modeling/evaluate'
                 element={<DataEvaluationPanel onShowSnackbar={showSnackbar} />}
               />
               <Route
