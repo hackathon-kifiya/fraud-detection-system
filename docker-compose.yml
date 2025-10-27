@@ -16,12 +16,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  anomaly-detection-engine:
-    build: ./anomaly-detection-engine
+  anomaly-detection:
+    build:
+      context: ./anomaly-detection
+      dockerfile: docker/Dockerfile
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
     ports:
-      - "5001:5001"
+      - "5001:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,11 +85,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://frauduser:fraudpass@postgres:5432/frauddb
       - ENGINE_URL=http://rule-engine:8081
-      - ANOMALY_DETECTION_ENGINE_URL=http://anomaly-detection-engine:5001
+      - ANOMALY_DETECTION_ENGINE_URL=http://anomaly-detection:5001
       - PREDICTIVE_ENGINE_URL=http://prediction-engine:5002
       - DECISION_SERVICE_URL=http://decision-service:5003
       - DATA_MANAGEMENT_SERVICE_URL=http://data-management-service:5004
-      - PYTHON_STATS_URL=http://anomaly-detection-engine:5001
+      - PYTHON_STATS_URL=http://anomaly-detection:5001
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://frontend:3000,http://frontend:3001
       - ENABLE_SWAGGER=true
     ports:
@@ -97,7 +99,7 @@ services:
         condition: service_healthy
       rule-engine:
         condition: service_started
-      anomaly-detection-engine:
+      anomaly-detection:
         condition: service_started
       prediction-engine:
         condition: service_started

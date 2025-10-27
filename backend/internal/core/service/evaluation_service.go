@@ -72,29 +72,15 @@ func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationR
 		}
 	}
 
-	// 3. Call Predictive Engine
+	// 3. Call Decision Service (predictive engine removed - using 0.0 as placeholder)
 	predictiveScore := 0.0
-	predictiveResp, err := s.predictiveEngineClient.Predict(req.DataType, req.Facts, nil)
-	if err != nil {
-		errors["predictive_engine"] = err.Error()
-		fmt.Printf("Warning: predictive engine failed: %v\n", err)
-	} else {
-		// Extract score from response
-		if len(predictiveResp.Predictions) > 0 {
-			if score, ok := predictiveResp.Predictions[0]["score"].(float64); ok {
-				predictiveScore = score
-			}
-		}
-	}
-
-	// 4. Call Decision Service
 	decisionResp, err := s.decisionServiceClient.MakeDecision(entityID, ruleEngineScore, anomalyScore, predictiveScore, req.DataType)
 	if err != nil {
 		errors["decision_service"] = err.Error()
 		fmt.Printf("Warning: decision service failed: %v\n", err)
 
-		// Default to human review if decision service fails
-		avgScore := (ruleEngineScore + anomalyScore + predictiveScore) / 3
+		// Default to human review if decision service fails (using 2 engines)
+		avgScore := (ruleEngineScore + anomalyScore) / 2
 		finalScorePercent := avgScore * 100
 		decisionResp = &client.DecisionResponse{
 			EntityID:          entityID,
@@ -109,8 +95,8 @@ func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationR
 					Contribution float64 `json:"contribution"`
 				}{
 					Score:        ruleEngineScore,
-					Weight:       33.33,
-					Contribution: ruleEngineScore * 0.3333,
+					Weight:       50.0,
+					Contribution: ruleEngineScore * 0.5,
 				},
 				AnomalyDetection: struct {
 					Score        float64 `json:"score"`
@@ -118,17 +104,17 @@ func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationR
 					Contribution float64 `json:"contribution"`
 				}{
 					Score:        anomalyScore,
-					Weight:       33.33,
-					Contribution: anomalyScore * 0.3333,
+					Weight:       50.0,
+					Contribution: anomalyScore * 0.5,
 				},
 				PredictiveEngine: struct {
 					Score        float64 `json:"score"`
 					Weight       float64 `json:"weight"`
 					Contribution float64 `json:"contribution"`
 				}{
-					Score:        predictiveScore,
-					Weight:       33.33,
-					Contribution: predictiveScore * 0.3333,
+					Score:        0.0,
+					Weight:       0.0,
+					Contribution: 0.0,
 				},
 			},
 		}
@@ -174,10 +160,10 @@ func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationR
 			Reason:            "Multi-engine evaluation flagged for review",
 			RiskScore:         decisionResp.FinalScore,
 			Status:            domain.StatusPending,
-			Details:           fmt.Sprintf(`{"rule_engine_score": %f, "anomaly_score": %f, "predictive_score": %f}`, ruleEngineScore, anomalyScore, predictiveScore),
+			Details:           fmt.Sprintf(`{"rule_engine_score": %f, "anomaly_score": %f}`, ruleEngineScore, anomalyScore),
 			RuleEngineScore:   &ruleEngineScore,
 			AnomalyScore:      &anomalyScore,
-			MLScore:           &predictiveScore,
+			MLScore:           nil,
 			DecisionBreakdown: string(breakdownJSON),
 			Confidence:        &confidence,
 			FinalScorePercent: &finalScorePercent,
@@ -201,7 +187,7 @@ func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationR
 			"score": anomalyScore,
 		},
 		"predictive_engine": map[string]interface{}{
-			"score": predictiveScore,
+			"score": 0.0,
 		},
 	}
 
@@ -251,7 +237,7 @@ func (s *EvaluationService) invokeCallbackAsync(ctx context.Context, dataType, e
 			"evaluation": map[string]interface{}{
 				"rule_engine_score": decision.Breakdown.RuleEngine.Score,
 				"anomaly_score":     decision.Breakdown.AnomalyDetection.Score,
-				"ml_score":          decision.Breakdown.PredictiveEngine.Score,
+				"ml_score":          0.0,
 				"final_score":       decision.FinalScore,
 				"decision":          decision.Decision,
 				"confidence":        decision.Confidence,
