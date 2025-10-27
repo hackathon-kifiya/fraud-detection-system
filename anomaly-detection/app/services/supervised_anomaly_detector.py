@@ -10,7 +10,7 @@ import pandas as pd
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.ml.preprocessing.feature_engineering.utils import (
+from app.ml.preprocessing.feature_engineering.training_features import (
     prepare_combined_features_from_df,
     prepare_customer_features_from_df,
     prepare_kyc_features_from_df,
@@ -125,29 +125,45 @@ class SupervisedAnomalyDetectorService:
 
     def _check_models_exist(self) -> bool:
         """Check if supervised model files exist"""
+        # At minimum, customer/kyc models must exist
         required_files = [
             settings.KYC_SUPERVISED_MODEL_PATH,
-            settings.TRANSACTION_SUPERVISED_MODEL_PATH,
             settings.KYC_SUPERVISED_SCALER_PATH,
-            settings.TRANSACTION_SUPERVISED_SCALER_PATH,
         ]
-        return all(os.path.exists(f) for f in required_files)
+        
+        if not all(os.path.exists(f) for f in required_files):
+            return False
+        
+        # Transaction models are optional
+        # Combined models are optional
+        return True
 
     def _load_models(self):
         """Load pre-trained supervised models from disk"""
         logger.info("Loading supervised models from disk...")
 
         try:
-            # Load KYC and transaction models
+            # Load KYC model (required) - this is aliased to customer_rf_model
             self.kyc_model = joblib.load(settings.KYC_SUPERVISED_MODEL_PATH)
             self.kyc_scaler = joblib.load(settings.KYC_SUPERVISED_SCALER_PATH)
+            
+            # Customer model is the same as KYC model
+            self.customer_model = self.kyc_model
+            self.customer_scaler = self.kyc_scaler
 
-            self.transaction_model = joblib.load(
-                settings.TRANSACTION_SUPERVISED_MODEL_PATH
-            )
-            self.transaction_scaler = joblib.load(
-                settings.TRANSACTION_SUPERVISED_SCALER_PATH
-            )
+            # Load transaction model if available (optional)
+            if os.path.exists(settings.TRANSACTION_SUPERVISED_MODEL_PATH) and os.path.exists(settings.TRANSACTION_SUPERVISED_SCALER_PATH):
+                self.transaction_model = joblib.load(
+                    settings.TRANSACTION_SUPERVISED_MODEL_PATH
+                )
+                self.transaction_scaler = joblib.load(
+                    settings.TRANSACTION_SUPERVISED_SCALER_PATH
+                )
+                logger.info("Transaction supervised model loaded successfully")
+            else:
+                logger.warning("Transaction supervised model not found, transaction predictions will not be available")
+                self.transaction_model = None
+                self.transaction_scaler = None
 
             # Load optional combined model if available
             if (
@@ -166,22 +182,8 @@ class SupervisedAnomalyDetectorService:
                     "Combined supervised model files not found, combined predictions will not be available"
                 )
 
-            # Load optional customer model if available
-            if (
-                os.path.exists(settings.CUSTOMER_SUPERVISED_MODEL_PATH)
-                and os.path.exists(settings.CUSTOMER_SUPERVISED_SCALER_PATH)
-            ):
-                self.customer_model = joblib.load(
-                    settings.CUSTOMER_SUPERVISED_MODEL_PATH
-                )
-                self.customer_scaler = joblib.load(
-                    settings.CUSTOMER_SUPERVISED_SCALER_PATH
-                )
-                logger.info("Customer supervised model loaded successfully")
-            else:
-                logger.warning(
-                    "Customer supervised model files not found, customer predictions will not be available"
-                )
+            # Customer model is already loaded (same as kyc_model)
+            logger.info("Customer supervised model ready (shared with KYC model)")
 
             logger.info("Supervised models loaded successfully!")
 
@@ -237,11 +239,16 @@ class SupervisedAnomalyDetectorService:
 
         try:
             if model_type == "kyc":
-                df = pd.read_csv(data_dir / "kyc_training_data.csv")
-                df_normal = df[df["is_anomaly"] == 0].sample(
-                    n=min(n_samples, len(df)), random_state=42
+                # KYC model is aliased to customer model, so use customer features
+                df = pd.read_csv(data_dir / "transaction_training_data.csv")
+                df_normal = df[df["is_anomaly"] == 0]
+                customer_ids = df_normal["customer_id"].unique()
+                sampled_customers = np.random.choice(
+                    customer_ids, min(n_samples, len(customer_ids)), replace=False
                 )
-                features = prepare_kyc_features_from_df(df_normal)
+                features = prepare_customer_features_from_df(
+                    df_normal[df_normal["customer_id"].isin(sampled_customers)]
+                )
                 return self.kyc_scaler.transform(features)
 
             elif model_type == "transaction":
@@ -457,9 +464,8 @@ class SupervisedAnomalyDetectorService:
         data_dict = data.model_dump()
         df = pd.DataFrame([data_dict])
         
-        # Use existing feature engineering function
-        from app.ml.preprocessing.feature_engineering.prepare_merged_data import prepare_kyc_features
-        features = prepare_kyc_features(df)
+        # Use KYC feature engineering function
+        features = prepare_kyc_features_from_df(df)
         return features
 
     def _extract_transaction_features(self, data: TransactionData) -> np.ndarray:
@@ -468,9 +474,8 @@ class SupervisedAnomalyDetectorService:
         data_dict = data.model_dump()
         df = pd.DataFrame([data_dict])
         
-        # Use existing feature engineering function
-        from app.ml.preprocessing.feature_engineering.prepare_transaction import prepare_transaction_features
-        features = prepare_transaction_features(df)
+        # Use transaction feature engineering function
+        features = prepare_transaction_features_from_df(df)
         return features
 
     def _calculate_risk_level(self, probability: float) -> RiskLevel:

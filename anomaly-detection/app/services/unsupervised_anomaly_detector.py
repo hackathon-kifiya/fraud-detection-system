@@ -9,9 +9,12 @@ from sklearn.preprocessing import StandardScaler
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.ml.preprocessing.feature_engineering.utils import (
+from app.ml.preprocessing.feature_engineering.training_features import (
     prepare_combined_features_from_df, prepare_customer_features_from_df,
-    prepare_kyc_features_from_df, prepare_transaction_features_from_df)
+    prepare_transaction_features_from_df)
+# For KYC individual predictions, use utils version
+from app.ml.preprocessing.feature_engineering.utils import (
+    prepare_kyc_features_from_df)
 from app.models.schemas import CombinedKYCBusinessData, KYCData, RiskLevel, TransactionData
 from app.services.explainer import ShapExplainerService
 
@@ -121,10 +124,13 @@ class UnsupervisedAnomalyDetectorService:
 
     def _check_models_exist(self) -> bool:
         """Check if model files exist"""
+        # Check for required models (customer and transaction)
         required_files = [
-            settings.KYC_MODEL_PATH,
+            settings.CUSTOMER_MODEL_PATH,
             settings.TRANSACTION_MODEL_PATH,
-            settings.KYC_SCALER_PATH,
+            settings.CUSTOMER_SCALER_PATH,
+            settings.COMBINED_MODEL_PATH,
+            settings.COMBINED_SCALER_PATH,
             settings.TRANSACTION_SCALER_PATH,
         ]
         return all(os.path.exists(f) for f in required_files)
@@ -133,37 +139,24 @@ class UnsupervisedAnomalyDetectorService:
         """Load pre-trained models from disk"""
         logger.info("Loading models from disk...")
 
-        # Load required KYC and transaction models
-        self.kyc_model = joblib.load(settings.KYC_MODEL_PATH)
-        self.kyc_scaler = joblib.load(settings.KYC_SCALER_PATH)
+        # Load required KYC/customer models (aliased to customer)
+        self.kyc_model = joblib.load(settings.KYC_MODEL_PATH)  # Points to customer_model
+        self.kyc_scaler = joblib.load(settings.KYC_SCALER_PATH)  # Points to customer_scaler
+        
+        # Also load as customer_model for batch predictions
+        self.customer_model = self.kyc_model
+        self.customer_scaler = self.kyc_scaler
 
+        # Load transaction models
         self.transaction_model = joblib.load(settings.TRANSACTION_MODEL_PATH)
         self.transaction_scaler = joblib.load(settings.TRANSACTION_SCALER_PATH)
 
-        # Load optional combined model if available
-        try:
-            if os.path.exists(settings.COMBINED_MODEL_PATH) and os.path.exists(settings.COMBINED_SCALER_PATH):
-                self.combined_model = joblib.load(settings.COMBINED_MODEL_PATH)
-                self.combined_scaler = joblib.load(settings.COMBINED_SCALER_PATH)
-                logger.info("Combined model loaded successfully")
-            else:
-                logger.warning("Combined model files not found, combined predictions will not be available")
-        except Exception as e:
-            logger.warning(f"Failed to load combined model: {e}")
-            self.combined_model = None
-            self.combined_scaler = None
+        self.combined_model = joblib.load(settings.COMBINED_MODEL_PATH)
+        self.combined_scaler = joblib.load(settings.COMBINED_SCALER_PATH)
 
-        try:
-            if os.path.exists(settings.CUSTOMER_MODEL_PATH) and os.path.exists(settings.CUSTOMER_SCALER_PATH):
-                self.customer_model = joblib.load(settings.CUSTOMER_MODEL_PATH)
-                self.customer_scaler = joblib.load(settings.CUSTOMER_SCALER_PATH)
-                logger.info("Customer model loaded successfully")
-            else:
-                logger.warning("Customer model files not found, customer predictions will not be available")
-        except Exception as e:
-            logger.warning(f"Failed to load customer model: {e}")
-            self.customer_model = None
-            self.customer_scaler = None
+        # Customer model is already loaded (same as kyc_model)
+        # The separate customer_model is for batch predictions
+        logger.info("Customer model ready (shared with KYC model)")
 
         logger.info("Models loaded successfully!")
 
@@ -171,39 +164,70 @@ class UnsupervisedAnomalyDetectorService:
         """Initialize SHAP explainers"""
         logger.info("Initializing SHAP explainers...")
 
+        # Try to initialize explainers, but don't fail if they can't be initialized
         try:
+            logger.info("Loading background data for KYC explainer...")
             kyc_background = self._load_background_data("kyc")
-            txn_background = self._load_background_data("transaction")
-
+            logger.info(f"KYC background data shape: {kyc_background.shape}")
+            
+            logger.info("Creating KYC SHAP explainer...")
             self.kyc_explainer = ShapExplainerService(
                 self.kyc_model, kyc_background, self.kyc_feature_names
             )
+            logger.info("KYC explainer created successfully")
+        except Exception as e:
+            logger.warning(f"Could not initialize KYC explainer: {e}")
+            self.kyc_explainer = None
+
+        try:
+            logger.info("Loading background data for transaction explainer...")
+            txn_background = self._load_background_data("transaction")
+            logger.info(f"Transaction background data shape: {txn_background.shape}")
+            
+            logger.info("Creating transaction SHAP explainer...")
             self.transaction_explainer = ShapExplainerService(
                 self.transaction_model, txn_background, self.transaction_feature_names
             )
+            logger.info("Transaction explainer created successfully")
+        except Exception as e:
+            logger.warning(f"Could not initialize transaction explainer: {e}")
+            self.transaction_explainer = None
 
-            # Initialize combined explainer if model exists
-            if self.combined_model is not None:
+        # Initialize combined explainer if model exists
+        if self.combined_model is not None:
+            try:
+                logger.info("Loading background data for combined explainer...")
                 combined_background = self._load_background_data("combined")
+                logger.info(f"Combined background data shape: {combined_background.shape}")
+                logger.info("Creating combined SHAP explainer...")
                 self.combined_explainer = ShapExplainerService(
                     self.combined_model,
                     combined_background,
                     self.combined_feature_names,
                 )
+                logger.info("Combined explainer created successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize combined explainer: {e}")
+                self.combined_explainer = None
 
-            # Initialize customer explainer if model exists
-            if self.customer_model is not None:
+        # Initialize customer explainer if model exists
+        if self.customer_model is not None:
+            try:
+                logger.info("Loading background data for customer explainer...")
                 customer_background = self._load_background_data("customer")
+                logger.info(f"Customer background data shape: {customer_background.shape}")
+                logger.info("Creating customer SHAP explainer...")
                 self.customer_explainer = ShapExplainerService(
                     self.customer_model,
                     customer_background,
                     self.customer_feature_names,
                 )
+                logger.info("Customer explainer created successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize customer explainer: {e}")
+                self.customer_explainer = None
 
-            logger.info("SHAP explainers initialized successfully!")
-        except Exception as e:
-            logger.error(f"Error initializing SHAP explainers: {e}")
-            raise
+        logger.info("SHAP explainer initialization complete!")
 
     def _load_background_data(
         self, model_type: str, n_samples: int = 100
@@ -215,12 +239,16 @@ class UnsupervisedAnomalyDetectorService:
 
         try:
             if model_type == "kyc":
-                df = pd.read_csv(data_dir / "kyc_training_data.csv")
-                # Sample normal records only
-                df_normal = df[df["is_anomaly"] == 0].sample(
-                    n=min(n_samples, len(df)), random_state=42
+                # KYC model is aliased to customer model, so use customer features
+                df = pd.read_csv(data_dir / "transaction_training_data.csv")
+                df_normal = df[df["is_anomaly"] == 0]
+                customer_ids = df_normal["customer_id"].unique()
+                sampled_customers = np.random.choice(
+                    customer_ids, min(n_samples, len(customer_ids)), replace=False
                 )
-                features = prepare_kyc_features_from_df(df_normal)
+                features = prepare_customer_features_from_df(
+                    df_normal[df_normal["customer_id"].isin(sampled_customers)]
+                )
                 return self.kyc_scaler.transform(features)
 
             elif model_type == "transaction":
@@ -317,7 +345,19 @@ class UnsupervisedAnomalyDetectorService:
 
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
-        explanation = self.kyc_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.kyc_explainer is not None:
+            explanation = self.kyc_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.kyc_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
 
         return is_anomaly, float(score), risk_level, explanation
 
@@ -334,7 +374,19 @@ class UnsupervisedAnomalyDetectorService:
 
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
-        explanation = self.transaction_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.transaction_explainer is not None:
+            explanation = self.transaction_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.transaction_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
 
         return is_anomaly, float(score), risk_level, explanation
 
@@ -363,17 +415,13 @@ class UnsupervisedAnomalyDetectorService:
                 "Combined model not available. Please ensure combined model files exist and are loaded."
             )
         
-        if self.combined_explainer is None:
-            raise ValueError(
-                "Combined explainer not initialized. Please ensure the service is properly initialized."
-            )
-        
         # Convert combined data to DataFrame format for feature preparation
         data_dict = data.model_dump()
         df = pd.DataFrame([data_dict])
         
         # Extract combined features (KYC + Business)
         features = prepare_combined_features_from_df(df)
+        logger.debug(f"Combined features shape: {features.shape}, expected by model: {len(self.combined_feature_names)}")
         scaled_features = self.combined_scaler.transform(features)
         
         # Make predictions
@@ -382,7 +430,19 @@ class UnsupervisedAnomalyDetectorService:
         
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
-        explanation = self.combined_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.combined_explainer is not None:
+            explanation = self.combined_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.combined_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
         
         return is_anomaly, float(score), risk_level, explanation
 
