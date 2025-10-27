@@ -6,22 +6,25 @@ import (
 
 // FlaggedItem represents a flagged item in the system
 type FlaggedItem struct {
-	ID              string     `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	Type            string     `json:"type" gorm:"not null"`                              // transactions, loan_requests, credit_history, kyc, repayments
-	DataID          string     `json:"data_id" gorm:"not null"`                           // ID of the original data item
-	Reason          string     `json:"reason" gorm:"not null"`                            // Why it was flagged
-	RiskScore       float64    `json:"risk_score" gorm:"not null"`                        // Risk score (0-100)
-	Status          string     `json:"status" gorm:"not null;default:'pending'"`          // pending, reviewed, confirmed, false_positive
-	Details         string     `json:"details" gorm:"type:text"`                          // Additional details
-	ReviewNotes     string     `json:"review_notes" gorm:"type:text"`                     // Primary review notes from auditor
-	RuleEngineScore *float64   `json:"rule_engine_score" gorm:"column:rule_engine_score"` // Score from rule engine
-	MLScore         *float64   `json:"ml_score" gorm:"column:ml_score"`                   // Score from ML model
-	AnomalyScore    *float64   `json:"anomaly_score" gorm:"column:anomaly_score"`         // Score from anomaly detection
-	FlaggedBy       string     `json:"flagged_by" gorm:"not null"`                        // System or user who flagged it
-	ReviewedBy      *string    `json:"reviewed_by" gorm:"column:reviewed_by"`             // User who reviewed it
-	ReviewedAt      *time.Time `json:"reviewed_at" gorm:"column:reviewed_at"`
-	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                string     `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	Type              string     `json:"type" gorm:"not null"`                                  // transactions, loan_requests, credit_history, kyc, repayments
+	DataID            string     `json:"data_id" gorm:"not null"`                               // ID of the original data item
+	Reason            string     `json:"reason" gorm:"not null"`                                // Why it was flagged
+	RiskScore         float64    `json:"risk_score" gorm:"not null"`                            // Risk score (0-100)
+	Status            string     `json:"status" gorm:"not null;default:'pending'"`              // pending, reviewed, confirmed, false_positive
+	Details           string     `json:"details" gorm:"type:text"`                              // Additional details
+	ReviewNotes       string     `json:"review_notes" gorm:"type:text"`                         // Primary review notes from auditor
+	RuleEngineScore   *float64   `json:"rule_engine_score" gorm:"column:rule_engine_score"`     // Score from rule engine
+	MLScore           *float64   `json:"ml_score" gorm:"column:ml_score"`                       // Score from ML model
+	AnomalyScore      *float64   `json:"anomaly_score" gorm:"column:anomaly_score"`             // Score from anomaly detection
+	DecisionBreakdown string     `json:"decision_breakdown" gorm:"type:text"`                   // JSON breakdown of decision aggregation
+	Confidence        *float64   `json:"confidence" gorm:"column:confidence"`                   // Decision confidence (0-1)
+	FinalScorePercent *float64   `json:"final_score_percent" gorm:"column:final_score_percent"` // Final score as percentage
+	FlaggedBy         string     `json:"flagged_by" gorm:"not null"`                            // System or user who flagged it
+	ReviewedBy        *string    `json:"reviewed_by" gorm:"column:reviewed_by"`                 // User who reviewed it
+	ReviewedAt        *time.Time `json:"reviewed_at" gorm:"column:reviewed_at"`
+	CreatedAt         time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt         time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 // TableName specifies the table name for GORM

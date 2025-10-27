@@ -1,11 +1,16 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/domain"
+	"com.github.hackathon-kifiya.fraud-detection-system/internal/core/port"
 	"gorm.io/gorm"
 )
 
@@ -13,7 +18,7 @@ type CallbackRepository struct {
 	db *gorm.DB
 }
 
-func NewCallbackRepository(db *gorm.DB) *CallbackRepository {
+func NewCallbackRepository(db *gorm.DB) port.CallbackRepository {
 	return &CallbackRepository{db: db}
 }
 
@@ -114,19 +119,65 @@ func (r *CallbackRepository) SendCallback(ctx context.Context, dataType string, 
 		}
 	}
 
-	// TODO: Implement actual HTTP callback sending logic
-	// This would typically use an HTTP client to POST/PUT/PATCH to the callback URL
-	// For now, we'll just log that we would send the callback
-	
-	// Example implementation would be:
-	// for _, callback := range activeCallbacks {
-	//     client := &http.Client{}
-	//     req, _ := http.NewRequest(callback.Method, callback.CallbackURL, payload)
-	//     // Parse and set headers
-	//     client.Do(req)
-	// }
+	// If no active callbacks, return silently
+	if len(activeCallbacks) == 0 {
+		return nil
+	}
+
+	// Implement actual HTTP callback sending logic
+	// Send asynchronously to avoid blocking
+	go r.sendCallbacksAsync(activeCallbacks, payload)
 
 	return nil
+}
+
+// sendCallbacksAsync sends callbacks asynchronously
+func (r *CallbackRepository) sendCallbacksAsync(callbacks []domain.Callback, payload interface{}) {
+	for _, callback := range callbacks {
+		// Create HTTP request
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			fmt.Printf("Warning: failed to marshal callback payload: %v\n", err)
+			continue
+		}
+
+		req, err := http.NewRequest(callback.Method, callback.CallbackURL, bytes.NewBuffer(jsonData))
+		if err != nil {
+			fmt.Printf("Warning: failed to create callback request: %v\n", err)
+			continue
+		}
+
+		// Set headers
+		req.Header.Set("Content-Type", "application/json")
+
+		// Parse and set custom headers if provided
+		if callback.Headers != "" {
+			headers, err := parseHeaders(callback.Headers)
+			if err == nil {
+				for key, value := range headers {
+					req.Header.Set(key, value)
+				}
+			}
+		}
+
+		// Send request
+		client := &http.Client{
+			Timeout: 30 * time.Second,
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Warning: failed to send callback to %s: %v\n", callback.CallbackURL, err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		// Check response status
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			fmt.Printf("Successfully sent callback to %s\n", callback.CallbackURL)
+		} else {
+			fmt.Printf("Warning: callback to %s returned status %d\n", callback.CallbackURL, resp.StatusCode)
+		}
+	}
 }
 
 // Helper function to parse headers string into map
@@ -135,7 +186,7 @@ func parseHeaders(headersStr string) (map[string]string, error) {
 	if headersStr == "" {
 		return headers, nil
 	}
-	
+
 	// Simple parsing - in production, use proper JSON parsing
 	// This assumes headers are in format: "key1:value1,key2:value2"
 	parts := strings.Split(headersStr, ",")
@@ -147,4 +198,3 @@ func parseHeaders(headersStr string) (map[string]string, error) {
 	}
 	return headers, nil
 }
-

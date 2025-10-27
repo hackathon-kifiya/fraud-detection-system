@@ -76,18 +76,14 @@ func main() {
 	performanceReportRepo := repository.NewPerformanceReportRepository(db)
 	kpiMetricsRepo := repository.NewKPIMetricsRepository(db)
 	callbackRepo := repository.NewCallbackRepository(db)
+	labeledDataRepo := repository.NewLabeledDataRepository(db)
 
 	// Initialize engine clients
-
-	// ruleEngineClient := client.NewRuleEngineClient(cfg.RuleEngineURL)
+	ruleEngineClient := client.NewRuleEngineClient(cfg.RuleEngineURL)
 	anomalyDetectionClient := client.NewAnomalyDetectionEngineClient(cfg.AnomalyDetectionEngineURL)
 	predictiveEngineClient := client.NewPredictiveEngineClient(cfg.PredictiveEngineURL)
 	decisionServiceClient := client.NewDecisionServiceClient(cfg.DecisionServiceURL)
 	dataManagementClient := client.NewDataManagementClient(cfg.DataManagementServiceURL)
-
-	// Initialize clients (for future use)
-	_ = anomalyDetectionClient
-	_ = predictiveEngineClient
 
 	// Initialize services
 
@@ -96,10 +92,17 @@ func main() {
 	jwtSecret := "your-secret-key"
 	userService := service.NewUserService(userRepo, jwtSecret)
 	flaggedItemService := service.NewFlaggedItemService(flaggedItemRepo, dataManagementClient)
-	// ruleEvaluationService := service.NewRuleEvaluationService(ruleEngineClient, flaggedItemRepo, flaggedItemService)
-	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo)
+	auditService := service.NewAuditService(flaggedItemRepo, auditNoteRepo, auditLogRepo, caseAssignmentRepo, labeledDataRepo, callbackRepo)
 	adminService := service.NewAdminService(flaggedItemRepo, auditLogRepo, systemConfigRepo, caseAssignmentRepo, performanceReportRepo, kpiMetricsRepo, userRepo)
 	callbackService := service.NewCallbackService(callbackRepo, dataManagementClient)
+	evaluationService := service.NewEvaluationService(
+		ruleEngineClient,
+		anomalyDetectionClient,
+		predictiveEngineClient,
+		decisionServiceClient,
+		flaggedItemRepo,
+		callbackRepo,
+	)
 
 	// Initialize router with CORS configuration
 	routerCfg := &router.RouterConfig{
@@ -122,6 +125,7 @@ func main() {
 	handler.InitAdminHandler(adminService, r)
 	handler.InitCallbackHandler(callbackService, r)
 	handler.InitDecisionHandler(decisionServiceClient, r)
+	handler.InitEvaluationHandler(evaluationService, r)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 

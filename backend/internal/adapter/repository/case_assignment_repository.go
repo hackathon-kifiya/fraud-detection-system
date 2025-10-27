@@ -54,12 +54,17 @@ func (r *CaseAssignmentRepository) GetByFlaggedItemID(ctx context.Context, flagg
 	return &assignment, nil
 }
 
-// GetByAuditorID retrieves assignments for an auditor
-func (r *CaseAssignmentRepository) GetByAuditorID(ctx context.Context, auditorID string, limit, offset int) ([]domain.CaseAssignment, int64, error) {
+// GetByAuditorID retrieves assignments for an auditor with optional status filter
+func (r *CaseAssignmentRepository) GetByAuditorID(ctx context.Context, auditorID string, limit, offset int, status string) ([]domain.CaseAssignment, int64, error) {
 	var assignments []domain.CaseAssignment
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&domain.CaseAssignment{}).Where("auditor_id = ?", auditorID)
+
+	// Apply status filter if provided
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
@@ -130,10 +135,18 @@ func (r *CaseAssignmentRepository) GetUnassignedCases(ctx context.Context, limit
 	var items []domain.FlaggedItem
 	var total int64
 
-	// Subquery to find flagged items that don't have assignments
-	subQuery := r.db.WithContext(ctx).Model(&domain.CaseAssignment{}).Select("flagged_item_id")
+	// Get all case assignments first
+	var assignedItemIDs []string
+	if err := r.db.WithContext(ctx).Model(&domain.CaseAssignment{}).Select("flagged_item_id").Find(&assignedItemIDs).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to get assigned cases: %w", err)
+	}
 
-	query := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("id NOT IN (?)", subQuery)
+	// Query flagged items that are pending and not in the assigned list
+	query := r.db.WithContext(ctx).Model(&domain.FlaggedItem{}).Where("status = ?", "pending")
+
+	if len(assignedItemIDs) > 0 {
+		query = query.Where("id NOT IN ?", assignedItemIDs)
+	}
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {

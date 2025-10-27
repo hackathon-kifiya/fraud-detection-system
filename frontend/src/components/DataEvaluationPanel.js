@@ -22,45 +22,37 @@ import {
 import { ruleEngineAPI } from "../services/api";
 
 const SAMPLE_DATA = {
-  TRANSACTION: {
-    entityId: "txn-123",
-    amount: 15000.0,
-    accountBalance: 5000.0,
-    type: "debit",
-    paymentMethod: "card",
-    timestamp: "2025-10-25T10:30:00Z",
+  transactions: {
+    customer_id: "CUST_12345",
+    date: "2024-10-25T14:30:00",
+    credit: 1000,
+    debit: 0,
+    closingBalance: 5000,
+    narrative: "Cash Deposit BY SELF",
+    source: "CASH DEPOSIT",
+    is_anomaly: 0,
   },
-  KYC: {
-    entityId: "user-456",
-    verifiedStatus: false,
-    documentType: "passport",
-    documentNumber: "A1234567",
-    issueDate: "2020-01-15",
-    expiryDate: "2030-01-15",
-  },
-  LOAN: {
-    entityId: "loan-789",
-    amount: 75000.0,
-    interestRate: 8.5,
-    termMonths: 36,
-    applicantIncome: 50000.0,
-    creditScore: 650,
-  },
-  CREDIT: {
-    entityId: "credit-101",
-    score: 580,
-    historyLength: 24,
-    utilizationRate: 0.85,
-    latePayments: 3,
-    inquiries: 5,
-  },
-  REPAYMENT: {
-    entityId: "repay-202",
-    isLate: true,
-    daysPastDue: 15,
-    amount: 2500.0,
-    originalDueDate: "2025-10-10",
-    currentBalance: 10000.0,
+  kyc: {
+    customer_id: "CUST_12345",
+    customer_name: "John Doe",
+    customer_age: 35,
+    customer_gender: "male",
+    customer_marital_status: "single",
+    customer_education_level: "primary",
+    customer_phone_number: 9123456789,
+    customer_tin_number: "1234567890",
+    customer_bank_account_number: "1234567890000",
+    customer_region: "ADDIS_ABABA",
+    customer_city: "ADDIS_ABABA",
+    customer_zone_or_sub_city: "ZONE_1",
+    customer_woreda: 1,
+    business_id: "BUS_12345",
+    business_name: "John's Business",
+    business_sector: "AGRICULTURE",
+    business_level: "GROWING",
+    business_tin_number: "9876543210",
+    business_current_capital: 150000,
+    business_current_no_of_employees: 5,
   },
 };
 
@@ -68,7 +60,7 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
   const [testData, setTestData] = useState("");
-  const [dataType, setDataType] = useState("TRANSACTION");
+  const [dataType, setDataType] = useState("");
   const [error, setError] = useState(null);
   const [dataTypes, setDataTypes] = useState([]);
   const [evaluationResult, setEvaluationResult] = useState(null);
@@ -84,8 +76,8 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
         if (types.length > 0) {
           // Set to the first active data type
           const activeType = types.find(dt => dt.status === 'ACTIVE') || types[0];
-          setDataType(activeType.dataType);
-          console.log("Setting initial dataType to:", activeType.dataType);
+          setDataType(activeType.data_type);
+          console.log("Setting initial dataType to:", activeType.data_type);
         }
       } catch (error) {
         console.error("Failed to load data types:", error);
@@ -108,43 +100,29 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
         throw new Error("Please select a data type");
       }
 
-      console.log("Calling API with dataType:", dataType);
+      // Get the data type definition from the loaded dataTypes
+      const dataTypeDefinition = dataTypes.find(dt => dt.data_type === dataType);
       
-      // Fetch sample data from CSV
-      const response = await ruleEngineAPI.getSampleData(dataType, 5);
-      const sampleRecords = response.data || [];
+      if (!dataTypeDefinition) {
+        throw new Error("Data type not found");
+      }
       
-      if (sampleRecords.length === 0) {
+      console.log("Found data type definition:", dataTypeDefinition);
+      
+      // Use the sample_data from the data type definition
+      let sampleData = dataTypeDefinition.sample_data;
+      
+      // Handle transactions data which has a nested structure
+      if (dataType === 'transactions' && sampleData && sampleData.transactions) {
+        sampleData = sampleData.transactions[0]; // Use first transaction
+      }
+      
+      if (!sampleData) {
         throw new Error("No sample data available");
       }
 
-      // Convert CSV records to JSON array format
-      const factsArray = sampleRecords.map(record => {
-        const fact = {};
-        // Convert all string values, keeping them as strings but try to parse numbers
-        Object.keys(record).forEach(key => {
-          const value = record[key];
-          // Try to parse as number, if it fails, keep as string
-          if (!isNaN(value) && value !== '') {
-            const num = parseFloat(value);
-            if (!isNaN(num)) {
-              fact[key] = Number.isInteger(num) ? parseInt(value) : parseFloat(value);
-            } else {
-              fact[key] = value;
-            }
-          } else {
-            fact[key] = value;
-          }
-        });
-        return fact;
-      });
-
       // Set the test data field with the fetched data
-      if (factsArray.length === 1) {
-        setTestData(JSON.stringify(factsArray[0], null, 2));
-      } else {
-        setTestData(JSON.stringify(factsArray, null, 2));
-      }
+      setTestData(JSON.stringify(sampleData, null, 2));
 
       onShowSnackbar("Sample data loaded successfully", "success");
     } catch (error) {
@@ -152,10 +130,9 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
       setError(error.response?.data?.message || error.message || "Failed to load sample data");
       onShowSnackbar("Failed to load sample data: " + (error.response?.data?.message || error.message), "error");
       
-      // Fallback to local sample data (map lowercase dataType to uppercase key)
-      const dataTypeKey = dataType.toUpperCase();
+      // Fallback to local sample data
       setTestData(
-        JSON.stringify(SAMPLE_DATA[dataTypeKey] || SAMPLE_DATA.TRANSACTION, null, 2)
+        JSON.stringify(SAMPLE_DATA[dataType] || SAMPLE_DATA.transactions, null, 2)
       );
     } finally {
       setLoadingSample(false);
@@ -230,7 +207,7 @@ const DataEvaluationPanel = ({ onShowSnackbar }) => {
                 label='Data Type'
               >
                 {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
-                  <MenuItem key={dt.id} value={dt.dataType}>
+                  <MenuItem key={dt.data_type} value={dt.data_type}>
                     {dt.name}
                   </MenuItem>
                 ))}

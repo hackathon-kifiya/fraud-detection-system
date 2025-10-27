@@ -28,52 +28,44 @@ import {
 import { ruleEngineAPI } from "../services/api";
 
 const SAMPLE_DATA = {
-  TRANSACTION: {
-    entityId: "txn-123",
-    amount: 15000.0,
-    accountBalance: 5000.0,
-    type: "debit",
-    paymentMethod: "card",
-    timestamp: "2025-10-25T10:30:00Z",
+  transactions: {
+    customer_id: "CUST_12345",
+    date: "2024-10-25T14:30:00",
+    credit: 1000,
+    debit: 0,
+    closingBalance: 5000,
+    narrative: "Cash Deposit BY SELF",
+    source: "CASH DEPOSIT",
+    is_anomaly: 0,
   },
-  KYC: {
-    entityId: "user-456",
-    verifiedStatus: false,
-    documentType: "passport",
-    documentNumber: "A1234567",
-    issueDate: "2020-01-15",
-    expiryDate: "2030-01-15",
-  },
-  LOAN: {
-    entityId: "loan-789",
-    amount: 75000.0,
-    interestRate: 8.5,
-    termMonths: 36,
-    applicantIncome: 50000.0,
-    creditScore: 650,
-  },
-  CREDIT: {
-    entityId: "credit-101",
-    score: 580,
-    historyLength: 24,
-    utilizationRate: 0.85,
-    latePayments: 3,
-    inquiries: 5,
-  },
-  REPAYMENT: {
-    entityId: "repay-202",
-    isLate: true,
-    daysPastDue: 15,
-    amount: 2500.0,
-    originalDueDate: "2025-10-10",
-    currentBalance: 10000.0,
+  kyc: {
+    customer_id: "CUST_12345",
+    customer_name: "John Doe",
+    customer_age: 35,
+    customer_gender: "male",
+    customer_marital_status: "single",
+    customer_education_level: "primary",
+    customer_phone_number: 9123456789,
+    customer_tin_number: "1234567890",
+    customer_bank_account_number: "1234567890000",
+    customer_region: "ADDIS_ABABA",
+    customer_city: "ADDIS_ABABA",
+    customer_zone_or_sub_city: "ZONE_1",
+    customer_woreda: 1,
+    business_id: "BUS_12345",
+    business_name: "John's Business",
+    business_sector: "AGRICULTURE",
+    business_level: "GROWING",
+    business_tin_number: "9876543210",
+    business_current_capital: 150000,
+    business_current_no_of_employees: 5,
   },
 };
 
 const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
   const [loading, setLoading] = useState(false);
   const [testData, setTestData] = useState("");
-  const [dataType, setDataType] = useState("TRANSACTION");
+  const [dataType, setDataType] = useState("");
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [dataTypes, setDataTypes] = useState([]);
@@ -84,7 +76,7 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
         const response = await ruleEngineAPI.getAllDataTypes();
         setDataTypes(response.data || []);
         if (response.data && response.data.length > 0) {
-          setDataType(response.data[0].dataType);
+          setDataType(response.data[0].data_type);
         }
       } catch (error) {
         console.error("Failed to load data types:", error);
@@ -95,23 +87,54 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
 
   useEffect(() => {
     if (open && rule) {
-      setDataType(rule.dataType);
-      setTestData(
-        JSON.stringify(
-          SAMPLE_DATA[rule.dataType] || SAMPLE_DATA.TRANSACTION,
-          null,
-          2
-        )
-      );
+      // Get sample data from data type definition
+      const dataTypeDefinition = dataTypes.find(dt => dt.data_type === rule.dataType);
+      
+      if (dataTypeDefinition && dataTypeDefinition.sample_data) {
+        let sampleData = dataTypeDefinition.sample_data;
+        
+        // Handle transactions data which has a nested structure
+        if (rule.dataType === 'transactions' && sampleData.transactions) {
+          sampleData = sampleData.transactions[0];
+        }
+        
+        setDataType(rule.dataType);
+        setTestData(JSON.stringify(sampleData, null, 2));
+      } else {
+        // Fallback to local sample data
+        setDataType(rule.dataType);
+        setTestData(
+          JSON.stringify(
+            SAMPLE_DATA[rule.dataType] || SAMPLE_DATA.transactions,
+            null,
+            2
+          )
+        );
+      }
       setResults(null);
       setError(null);
     }
-  }, [open, rule]);
+  }, [open, rule, dataTypes]);
 
   const handleLoadSample = () => {
-    setTestData(
-      JSON.stringify(SAMPLE_DATA[dataType] || SAMPLE_DATA.TRANSACTION, null, 2)
-    );
+    // Get sample data from data type definition
+    const dataTypeDefinition = dataTypes.find(dt => dt.data_type === dataType);
+    
+    if (dataTypeDefinition && dataTypeDefinition.sample_data) {
+      let sampleData = dataTypeDefinition.sample_data;
+      
+      // Handle transactions data which has a nested structure
+      if (dataType === 'transactions' && sampleData.transactions) {
+        sampleData = sampleData.transactions[0];
+      }
+      
+      setTestData(JSON.stringify(sampleData, null, 2));
+    } else {
+      // Fallback to local sample data
+      setTestData(
+        JSON.stringify(SAMPLE_DATA[dataType] || SAMPLE_DATA.transactions, null, 2)
+      );
+    }
   };
 
   const handleTestRule = async () => {
@@ -203,8 +226,8 @@ const RuleTestPanel = ({ open, rule, onClose, onShowSnackbar }) => {
                     label='Data Type'
                   >
                     {dataTypes.filter(dt => dt.status === 'ACTIVE').map((dt) => (
-                      <MenuItem key={dt.id} value={dt.name}>
-                        {dt.displayName || dt.name}
+                      <MenuItem key={dt.data_type} value={dt.data_type}>
+                        {dt.name}
                       </MenuItem>
                     ))}
                   </Select>

@@ -28,5 +28,7 @@ type CallbackRepository interface {
 
 	// GetActiveCallbacks retrieves all active callbacks
 	GetActiveCallbacks(ctx context.Context) ([]domain.Callback, error)
-}
 
+	// SendCallback sends a callback with the provided payload
+	SendCallback(ctx context.Context, dataType string, payload interface{}) error
+}

@@ -27,6 +27,7 @@ import {
   Alert,
 } from "@mui/material";
 import {
+  Calculate as CalculateIcon,
   Visibility as ViewIcon,
   Close as CloseIcon,
   CheckCircle as CheckCircleIcon,
@@ -44,23 +45,31 @@ const MyCasesPage = ({ onShowSnackbar }) => {
   const [reviewNote, setReviewNote] = useState("");
   const [classification, setClassification] = useState("");
   const [showRawJson, setShowRawJson] = useState(false);
+  
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
 
   const loadMyCases = useCallback(async () => {
     try {
       setLoading(true);
+      const offset = page * limit;
       const response = await auditAPI.getMyAssignments({
-        limit: 100,
-        offset: 0,
+        limit,
+        offset,
       });
       setCases(response.data.assignments || []);
+      setTotal(response.data.total || 0);
     } catch (error) {
       console.error("Error loading cases:", error);
       onShowSnackbar?.("Failed to load cases", "error");
       setCases([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [onShowSnackbar]);
+  }, [page, limit, onShowSnackbar]);
 
   useEffect(() => {
     loadMyCases();
@@ -224,11 +233,30 @@ const MyCasesPage = ({ onShowSnackbar }) => {
   const renderEvaluationResults = () => {
     if (!selectedCase) return null;
 
-    // Get scores from the selected case
-    const ruleEngineScore = selectedCase.rule_engine_score;
-    const mlScore = selectedCase.ml_score;
-    const anomalyScore = selectedCase.anomaly_score;
-    const overallRiskScore = selectedCase.risk_score;
+    console.log("Selected case for evaluation:", selectedCase);
+    
+    // Get scores from the selected case - try multiple possible field names
+    let ruleEngineScore = selectedCase.rule_engine_score ?? selectedCase.ruleEngineScore;
+    let mlScore = selectedCase.ml_score ?? selectedCase.mlScore;
+    let anomalyScore = selectedCase.anomaly_score ?? selectedCase.anomalyScore;
+    const overallRiskScore = selectedCase.risk_score ?? selectedCase.riskScore;
+    
+    // Try to parse scores from details field if not in main fields
+    if ((!ruleEngineScore && ruleEngineScore !== 0) || (!mlScore && mlScore !== 0) || (!anomalyScore && anomalyScore !== 0)) {
+      try {
+        if (selectedCase.details && typeof selectedCase.details === 'string') {
+          const detailsObj = JSON.parse(selectedCase.details);
+          if (detailsObj.rule_engine_score !== undefined) ruleEngineScore = detailsObj.rule_engine_score;
+          if (detailsObj.anomaly_score !== undefined) anomalyScore = detailsObj.anomaly_score;
+          if (detailsObj.predictive_score !== undefined) mlScore = detailsObj.predictive_score;
+          if (detailsObj.ml_score !== undefined) mlScore = detailsObj.ml_score;
+        }
+      } catch (e) {
+        console.error("Could not parse details field:", e);
+      }
+    }
+    
+    console.log("Scores found:", { ruleEngineScore, mlScore, anomalyScore, overallRiskScore });
 
     return (
       <Box>
@@ -275,7 +303,7 @@ const MyCasesPage = ({ onShowSnackbar }) => {
                   <Typography variant="h6">Rule Engine</Typography>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
-                {ruleEngineScore !== null && ruleEngineScore !== undefined ? (
+                {(ruleEngineScore !== null && ruleEngineScore !== undefined && !isNaN(ruleEngineScore)) ? (
                   <>
                     <Typography variant="h3" sx={{ color: "#1976d2", mb: 1 }}>
                       {ruleEngineScore.toFixed(1)}
@@ -307,7 +335,7 @@ const MyCasesPage = ({ onShowSnackbar }) => {
                   <Typography variant="h6">Anomaly Detection</Typography>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
-                {anomalyScore !== null && anomalyScore !== undefined ? (
+                {(anomalyScore !== null && anomalyScore !== undefined && !isNaN(anomalyScore)) ? (
                   <>
                     <Typography variant="h3" sx={{ color: "#f57c00", mb: 1 }}>
                       {anomalyScore.toFixed(1)}
@@ -339,7 +367,7 @@ const MyCasesPage = ({ onShowSnackbar }) => {
                   <Typography variant="h6">ML Prediction</Typography>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
-                {mlScore !== null && mlScore !== undefined ? (
+                {(mlScore !== null && mlScore !== undefined && !isNaN(mlScore)) ? (
                   <>
                     <Typography variant="h3" sx={{ color: "#d32f2f", mb: 1 }}>
                       {mlScore.toFixed(1)}
@@ -382,6 +410,86 @@ const MyCasesPage = ({ onShowSnackbar }) => {
                   ? selectedCase.details 
                   : JSON.stringify(selectedCase.details, null, 2)}
               </Typography>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Decision Aggregation Breakdown */}
+        {selectedCase.breakdown && (
+          <Card sx={{ mt: 3, borderLeft: "4px solid #ff9800" }}>
+            <CardContent>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+                <CalculateIcon sx={{ mr: 1, color: "#ff9800" }} />
+                <Typography variant="h6">Score Aggregation</Typography>
+              </Box>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={3}>
+                {/* Rule Engine Breakdown */}
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Rule Engine
+                    </Typography>
+                    <Typography variant="h5" sx={{ mb: 1 }}>
+                      {(selectedCase.breakdown.rule_engine?.score * 100).toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Weight: {selectedCase.breakdown.rule_engine?.weight}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Contribution: {selectedCase.breakdown.rule_engine?.contribution.toFixed(2)}
+                    </Typography>
+                  </Card>
+                </Grid>
+
+                {/* Anomaly Detection Breakdown */}
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Anomaly Detection
+                    </Typography>
+                    <Typography variant="h5" sx={{ mb: 1 }}>
+                      {(selectedCase.breakdown.anomaly_detection?.score * 100).toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Weight: {selectedCase.breakdown.anomaly_detection?.weight}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Contribution: {selectedCase.breakdown.anomaly_detection?.contribution.toFixed(2)}
+                    </Typography>
+                  </Card>
+                </Grid>
+
+                {/* Predictive Engine Breakdown */}
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Predictive Engine
+                    </Typography>
+                    <Typography variant="h5" sx={{ mb: 1 }}>
+                      {(selectedCase.breakdown.predictive_engine?.score * 100).toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Weight: {selectedCase.breakdown.predictive_engine?.weight}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Contribution: {selectedCase.breakdown.predictive_engine?.contribution.toFixed(2)}
+                    </Typography>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Final Score:</strong> {selectedCase.final_score_percent ? (selectedCase.final_score_percent).toFixed(2) : (selectedCase.risk_score * 100).toFixed(2)}%
+                </Typography>
+                {selectedCase.confidence && (
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Confidence:</strong> {(selectedCase.confidence * 100).toFixed(1)}%
+                  </Typography>
+                )}
+              </Box>
             </CardContent>
           </Card>
         )}
@@ -557,6 +665,55 @@ const MyCasesPage = ({ onShowSnackbar }) => {
                 ))}
               </TableBody>
             </Table>
+            {/* Pagination */}
+            {cases.length > 0 && (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  borderTop: "1px solid #e0e0e0",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      Showing {page * limit + 1}-
+                      {Math.min((page + 1) * limit, total)} of {total} cases
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      |
+                    </Typography>
+                    <Typography variant="body2">
+                      Page {page + 1} of {Math.ceil(total / limit) || 1}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={page === 0}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={(page + 1) * limit >= total}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Next
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            )}
           </TableContainer>
         )}
       </Paper>

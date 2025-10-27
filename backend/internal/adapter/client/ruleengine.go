@@ -53,7 +53,7 @@ func (c *RuleEngineClient) Evaluate(dataType string, facts []map[string]interfac
 		DataType: dataType,
 		Facts:    facts,
 	}
-	return c.evaluate("/evaluate", req)
+	return c.evaluate("/api/evaluate/", req)
 }
 
 // evaluate makes a generic evaluation request
@@ -86,21 +86,12 @@ func (c *RuleEngineClient) evaluate(endpoint string, req EvaluationRequest) (*Ev
 		return nil, fmt.Errorf("rule engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var result struct {
-		Success  bool               `json:"success"`
-		Response EvaluationResponse `json:"response"`
-		Error    string             `json:"error,omitempty"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
+	var response EvaluationResponse
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	if !result.Success {
-		return nil, fmt.Errorf("rule engine error: %s", result.Error)
-	}
-
-	return &result.Response, nil
+	return &response, nil
 }
 
 // makeRequest is a generic method for making HTTP requests

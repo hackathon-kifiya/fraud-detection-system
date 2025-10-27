@@ -142,8 +142,9 @@ func deleteUserHandler(c *gin.Context) {
 func listUsersHandler(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	role := c.Query("role")
 
-	users, total, err := userService.ListUsers(c.Request.Context(), limit, offset)
+	users, total, err := userService.ListUsers(c.Request.Context(), limit, offset, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
 		return

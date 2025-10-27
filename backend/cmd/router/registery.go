@@ -63,13 +63,17 @@ func RegisterHealthEndpoint() {
 }
 
 func RegisterSwaggerEndpoint(r *gin.Engine) {
+	if r == nil {
+		return
+	}
+
 	// Swagger JSON endpoint
 	r.GET("/swagger/doc.json", func(c *gin.Context) {
 		c.JSON(200, getSwaggerJSON())
 	})
 
-	// Swagger UI endpoint - use a different path to avoid conflict
+	// Swagger UI endpoint
 	r.GET("/swagger", func(c *gin.Context) {
-		c.HTML(200, "text/html", getSwaggerUI())
+		c.Data(200, "text/html", []byte(getSwaggerUI()))
 	})
 }

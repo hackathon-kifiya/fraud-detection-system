@@ -56,12 +56,16 @@ func getSwaggerJSON() map[string]interface{} {
 				"name":        "Callbacks",
 				"description": "Webhook callbacks configuration",
 			},
+			{
+				"name":        "Evaluation",
+				"description": "Fraud detection evaluation orchestration",
+			},
 		},
 		"paths": map[string]interface{}{
 			"/health": map[string]interface{}{
 				"get": map[string]interface{}{
-					"tags": []string{"Health"},
-					"summary": "Health check",
+					"tags":        []string{"Health"},
+					"summary":     "Health check",
 					"description": "Check if the API is running",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
@@ -129,7 +133,7 @@ func getSwaggerJSON() map[string]interface{} {
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
+									"type":     "object",
 									"required": []string{"email", "password"},
 									"properties": map[string]interface{}{
 										"email": map[string]interface{}{
@@ -350,6 +354,41 @@ func getSwaggerJSON() map[string]interface{} {
 					},
 				},
 			},
+			"/api/evaluate": map[string]interface{}{
+				"post": map[string]interface{}{
+					"tags":        []string{"Evaluation"},
+					"summary":     "Evaluate transaction for fraud",
+					"description": "Orchestrate fraud detection across rule engine, anomaly detection, and predictive engine. Returns evaluation scores and decision (auto-approve, auto-reject, or human review).",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/EvaluationRequest",
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Evaluation completed successfully",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]interface{}{
+										"$ref": "#/components/schemas/EvaluationResponse",
+									},
+								},
+							},
+						},
+						"400": map[string]interface{}{
+							"description": "Invalid request - missing or invalid dataType or facts",
+						},
+						"500": map[string]interface{}{
+							"description": "Internal server error - one or more engines failed",
+						},
+					},
+				},
+			},
 		},
 		"components": map[string]interface{}{
 			"securitySchemes": map[string]interface{}{
@@ -362,7 +401,7 @@ func getSwaggerJSON() map[string]interface{} {
 			},
 			"schemas": map[string]interface{}{
 				"CreateUserRequest": map[string]interface{}{
-					"type": "object",
+					"type":     "object",
 					"required": []string{"email", "password", "first_name", "last_name", "role"},
 					"properties": map[string]interface{}{
 						"email": map[string]interface{}{
@@ -379,13 +418,13 @@ func getSwaggerJSON() map[string]interface{} {
 							"type": "string",
 						},
 						"role": map[string]interface{}{
-							"type":    "string",
-							"enum":    []string{"admin", "analyst", "viewer"},
+							"type": "string",
+							"enum": []string{"admin", "analyst", "viewer"},
 						},
 					},
 				},
 				"CreateDataTypeRequest": map[string]interface{}{
-					"type": "object",
+					"type":     "object",
 					"required": []string{"data_type", "name", "schema_definition"},
 					"properties": map[string]interface{}{
 						"data_type": map[string]interface{}{
@@ -398,10 +437,10 @@ func getSwaggerJSON() map[string]interface{} {
 							"type": "string",
 						},
 						"schema_definition": map[string]interface{}{
-							"type":    "object",
+							"type": "object",
 							"example": map[string]interface{}{
 								"fields": map[string]string{
-									"amount":  "Double",
+									"amount":   "Double",
 									"merchant": "String",
 								},
 								"required": []string{"amount"},
@@ -436,8 +475,110 @@ func getSwaggerJSON() map[string]interface{} {
 							"type": "object",
 						},
 						"status": map[string]interface{}{
-							"type":    "string",
-							"enum":    []string{"ACTIVE", "INACTIVE", "DRAFT"},
+							"type": "string",
+							"enum": []string{"ACTIVE", "INACTIVE", "DRAFT"},
+						},
+					},
+				},
+				"EvaluationRequest": map[string]interface{}{
+					"type":     "object",
+					"required": []string{"dataType", "facts"},
+					"properties": map[string]interface{}{
+						"dataType": map[string]interface{}{
+							"type":        "string",
+							"description": "Data type identifier (e.g., 'transactions', 'loan_requests', 'kyc')",
+							"example":     "transactions",
+						},
+						"facts": map[string]interface{}{
+							"type":        "array",
+							"description": "Array of facts/records to evaluate",
+							"items": map[string]interface{}{
+								"type": "object",
+							},
+							"example": []map[string]interface{}{
+								{
+									"transaction_id": "tx_123",
+									"amount":         1000.50,
+									"merchant":       "Example Store",
+								},
+							},
+						},
+					},
+				},
+				"EvaluationResponse": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"success": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Whether the evaluation completed successfully",
+							"example":     true,
+						},
+						"result": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"entity_id": map[string]interface{}{
+									"type":        "string",
+									"description": "Unique identifier for this evaluation",
+									"example":     "550e8400-e29b-41d4-a716-446655440000",
+								},
+								"data_type": map[string]interface{}{
+									"type":        "string",
+									"description": "Data type that was evaluated",
+									"example":     "transactions",
+								},
+								"rule_engine_score": map[string]interface{}{
+									"type":        "number",
+									"format":      "float",
+									"description": "Risk score from rule engine (0-100)",
+									"example":     75.5,
+								},
+								"anomaly_detection_score": map[string]interface{}{
+									"type":        "number",
+									"format":      "float",
+									"description": "Risk score from anomaly detection (0-100)",
+									"example":     60.0,
+								},
+								"predictive_engine_score": map[string]interface{}{
+									"type":        "number",
+									"format":      "float",
+									"description": "Risk score from predictive engine (0-100)",
+									"example":     80.0,
+								},
+								"final_score": map[string]interface{}{
+									"type":        "number",
+									"format":      "float",
+									"description": "Final weighted risk score",
+									"example":     72.5,
+								},
+								"decision": map[string]interface{}{
+									"type":        "string",
+									"description": "Final decision: 'auto_approve', 'auto_reject', or 'human_review'",
+									"enum":        []string{"auto_approve", "auto_reject", "human_review"},
+									"example":     "human_review",
+								},
+								"action_taken": map[string]interface{}{
+									"type":        "string",
+									"description": "Action taken: 'callback_invoked' or 'case_created'",
+									"example":     "case_created",
+								},
+								"flagged_item_id": map[string]interface{}{
+									"type":        "string",
+									"description": "ID of created flagged item (null if auto decision)",
+									"example":     "550e8400-e29b-41d4-a716-446655440001",
+								},
+								"errors": map[string]interface{}{
+									"type":        "object",
+									"description": "Any errors from engines (empty if all succeeded)",
+									"additionalProperties": map[string]string{
+										"type": "string",
+									},
+									"example": map[string]string{},
+								},
+							},
+						},
+						"message": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional message",
 						},
 					},
 				},
@@ -476,4 +617,3 @@ func getSwaggerUI() string {
 </body>
 </html>`
 }
-

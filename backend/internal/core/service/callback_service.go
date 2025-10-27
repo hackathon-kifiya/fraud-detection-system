@@ -163,3 +163,8 @@ func (s *CallbackService) GetAvailableDataTypes() ([]client.DataManagementDataTy
 	}
 	return dataTypes, nil
 }
+
+// InvokeCallbacksForEvaluation invokes callbacks with evaluation results asynchronously
+func (s *CallbackService) InvokeCallbacksForEvaluation(ctx context.Context, dataType string, payload interface{}) error {
+	return s.callbackRepo.SendCallback(ctx, dataType, payload)
+}

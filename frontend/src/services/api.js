@@ -322,7 +322,6 @@ export const ruleEngineAPI = {
 
   // Data Type Management (fetched from data-management-service)
   getAllDataTypes: () => dataManagementServiceApi.get("/data-types"),
-  getSampleData: (dataType, limit) => dataManagementServiceApi.get(`/data-types/${dataType}/sample-data`, { params: { limit } }),
 
   // Rule evaluation
   evaluateGeneric: (dataType, facts) =>
