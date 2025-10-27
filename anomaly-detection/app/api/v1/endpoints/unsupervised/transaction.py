@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.v1.dependencies import get_anomaly_service
 from app.core.logging import logger
-from app.core.security import AuditLogger, InputSanitizer, get_api_key
+from app.core.security import AuditLogger, get_api_key
 from app.models.schemas import (
     AnomalyResponse,
     BatchTransactionRequest,
@@ -37,16 +37,6 @@ async def check_transaction(
     Requires API key authentication via X-API-Key header
     """
     try:
-        # Validate customer ID format
-        if not InputSanitizer.validate_customer_id(data.customer_id):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Invalid customer_id format. Must start with 'CUST_' "
-                    "and contain only alphanumeric characters and underscores"
-                ),
-            )
-
         logger.info(
             "Processing transaction check for customer: %s on date: %s",
             data.customer_id,
@@ -108,17 +98,6 @@ async def batch_transaction_check(
 
     for transaction in request.transactions:
         try:
-            # Validate customer ID format
-            if not InputSanitizer.validate_customer_id(transaction.customer_id):
-                logger.warning("Invalid customer_id format: %s", transaction.customer_id)
-                results.append(
-                    BatchTransactionResult(
-                        customer_id=transaction.customer_id,
-                        error="Invalid customer_id format",
-                    )
-                )
-                continue
-
             is_anomaly, score, risk_level, explanation = service.predict_transaction(
                 transaction
             )
@@ -215,16 +194,6 @@ async def batch_customer_transactions(
     """
     try:
         start_time = time.time()
-
-        # Validate customer ID format
-        if not InputSanitizer.validate_customer_id(request.customer_id):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Invalid customer_id format. Must start with 'CUST_' "
-                    "and contain only alphanumeric characters and underscores"
-                ),
-            )
 
         logger.info(
             "Processing customer batch transactions for customer: %s with %d transactions",

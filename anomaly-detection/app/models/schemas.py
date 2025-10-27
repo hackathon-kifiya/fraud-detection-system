@@ -435,7 +435,7 @@ class AnomalyResponse(BaseModel):
 
     is_anomaly: bool = Field(..., description="Whether the record is anomalous")
     anomaly_score: float = Field(
-        ..., description="Anomaly score (lower is more anomalous)"
+        ..., description="Anomaly score (0-1, higher is more anomalous)"
     )
     risk_level: RiskLevel = Field(..., description="Risk level classification")
     explanation: ShapExplanation = Field(..., description="SHAP explanation")

@@ -56,8 +56,3 @@ def get_supervised_anomaly_service(request: Request) -> SupervisedAnomalyDetecto
 def get_anomaly_service(request: Request) -> UnsupervisedAnomalyDetectorService:
     """Alias for get_unsupervised_anomaly_detector_service"""
     return get_unsupervised_anomaly_detector_service(request)
-
-
-def get_anomaly_service(request: Request) -> UnsupervisedAnomalyDetectorService:
-    """Alias for get_unsupervised_anomaly_detector_service"""
-    return get_unsupervised_anomaly_detector_service(request)

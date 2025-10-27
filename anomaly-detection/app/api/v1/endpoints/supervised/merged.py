@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.v1.dependencies import get_supervised_anomaly_service
 from app.core.logging import logger
-from app.core.security import AuditLogger, InputSanitizer, get_api_key
+from app.core.security import AuditLogger, get_api_key
 from app.models.schemas import (
     AnomalyResponse,
     BatchCombinedRequest,
@@ -35,16 +35,6 @@ async def check_merged(
     Requires API key authentication via X-API-Key header
     """
     try:
-        # Validate customer ID format
-        if not InputSanitizer.validate_customer_id(data.customer_id):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Invalid customer_id format. Must start with 'CUST_' "
-                    "and contain only alphanumeric characters and underscores"
-                ),
-            )
-
         logger.info(
             "Processing supervised merged check for customer: %s, business: %s",
             data.customer_id,
@@ -116,18 +106,6 @@ async def batch_merged_check(
 
         for record in request.records:
             try:
-                # Validate customer ID format
-                if not InputSanitizer.validate_customer_id(record.customer_id):
-                    logger.warning("Invalid customer_id format: %s", record.customer_id)
-                    results.append(
-                        BatchCombinedResult(
-                            customer_id=record.customer_id,
-                            business_id=record.business_tin_number,
-                            error="Invalid customer_id format",
-                        )
-                    )
-                    continue
-
                 is_anomaly, score, risk_level, explanation = service.predict_combined(
                     record
                 )

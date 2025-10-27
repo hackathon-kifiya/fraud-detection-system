@@ -5,7 +5,6 @@ Input validation and data verification functions
 from typing import Any, Dict, Optional, Tuple
 
 from app.core.logging import get_logger
-from app.core.security import InputSanitizer
 
 logger = get_logger(__name__)
 
@@ -20,11 +19,6 @@ def validate_kyc_data(kyc_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     Returns:
         Tuple of (is_valid, error_message)
     """
-    # Validate customer ID
-    if "customer_id" in kyc_data:
-        if not InputSanitizer.validate_customer_id(kyc_data["customer_id"]):
-            return False, "Invalid customer_id format"
-
     # Validate required fields
     required_fields = ["customer_id", "first_name", "last_name"]
     for field in required_fields:
@@ -57,10 +51,6 @@ def validate_transaction_data(
     for field in required_fields:
         if field not in transaction_data or transaction_data[field] is None:
             return False, f"Missing required field: {field}"
-
-    # Validate customer ID
-    if not InputSanitizer.validate_customer_id(transaction_data["customer_id"]):
-        return False, "Invalid customer_id format"
 
     # Validate numeric fields are non-negative if present
     numeric_fields = ["credit", "debit", "closingBalance"]
