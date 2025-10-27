@@ -51,9 +51,9 @@ htmlcov/
 .nox/
 
 # Models and Data
-data/models/*.pkl
 data/raw/*
 data/processed/*
+data/models/**/background_cache/*
 !data/models/.gitkeep
 !data/raw/.gitkeep
 !data/processed/.gitkeep
