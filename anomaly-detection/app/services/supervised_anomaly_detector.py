@@ -195,46 +195,99 @@ class SupervisedAnomalyDetectorService:
         """Initialize SHAP explainers for supervised models"""
         logger.info("Initializing SHAP explainers for supervised models...")
 
+        # Try to initialize KYC explainer
         try:
+            logger.info("Loading background data for KYC explainer...")
             kyc_background = self._load_background_data("kyc")
-            txn_background = self._load_background_data("transaction")
-
+            logger.info(f"KYC background data shape: {kyc_background.shape}")
+            
+            logger.info("Creating KYC SHAP explainer...")
             self.kyc_explainer = ShapExplainerService(
                 self.kyc_model, kyc_background, self.kyc_feature_names
             )
-            self.transaction_explainer = ShapExplainerService(
-                self.transaction_model, txn_background, self.transaction_feature_names
-            )
+            logger.info("KYC explainer created successfully")
+        except Exception as e:
+            logger.warning(f"Could not initialize KYC explainer: {e}")
+            self.kyc_explainer = None
 
-            # Initialize combined explainer if model exists
-            if self.combined_model is not None:
+        # Try to initialize transaction explainer if model exists
+        if self.transaction_model is not None:
+            try:
+                logger.info("Loading background data for transaction explainer...")
+                txn_background = self._load_background_data("transaction")
+                logger.info(f"Transaction background data shape: {txn_background.shape}")
+                
+                logger.info("Creating transaction SHAP explainer...")
+                self.transaction_explainer = ShapExplainerService(
+                    self.transaction_model, txn_background, self.transaction_feature_names
+                )
+                logger.info("Transaction explainer created successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize transaction explainer: {e}")
+                self.transaction_explainer = None
+        else:
+            self.transaction_explainer = None
+
+        # Initialize combined explainer if model exists
+        if self.combined_model is not None:
+            try:
+                logger.info("Loading background data for combined explainer...")
                 combined_background = self._load_background_data("combined")
+                logger.info(f"Combined background data shape: {combined_background.shape}")
+                
+                logger.info("Creating combined SHAP explainer...")
                 self.combined_explainer = ShapExplainerService(
                     self.combined_model,
                     combined_background,
                     self.combined_feature_names,
                 )
+                logger.info("Combined explainer created successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize combined explainer: {e}")
+                self.combined_explainer = None
 
-            # Initialize customer explainer if model exists
-            if self.customer_model is not None:
+        # Initialize customer explainer if model exists
+        if self.customer_model is not None:
+            try:
+                logger.info("Loading background data for customer explainer...")
                 customer_background = self._load_background_data("customer")
+                logger.info(f"Customer background data shape: {customer_background.shape}")
+                
+                logger.info("Creating customer SHAP explainer...")
                 self.customer_explainer = ShapExplainerService(
                     self.customer_model,
                     customer_background,
                     self.customer_feature_names,
                 )
+                logger.info("Customer explainer created successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize customer explainer: {e}")
+                self.customer_explainer = None
 
-            logger.info("SHAP explainers initialized successfully!")
-        except Exception as e:
-            logger.error(f"Error initializing SHAP explainers: {e}")
-            raise
+        logger.info("SHAP explainer initialization complete!")
 
     def _load_background_data(
         self, model_type: str, n_samples: int = 100
     ) -> np.ndarray:
-        """Load background data from training files for SHAP"""
+        """Load background data from training files for SHAP with caching"""
         from pathlib import Path
 
+        # Cache directory for background data
+        cache_dir = Path("data/models/supervised/background_cache")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Cache file path
+        cache_file = cache_dir / f"{model_type}_background_{n_samples}.npy"
+        
+        # Try to load from cache first
+        if cache_file.exists():
+            try:
+                logger.info(f"Loading cached background data for {model_type}...")
+                return np.load(cache_file)
+            except Exception as e:
+                logger.warning(f"Failed to load cached background data: {e}, regenerating...")
+
+        # If cache doesn't exist or failed, generate from raw data
         data_dir = Path("data/raw")
 
         try:
@@ -249,7 +302,12 @@ class SupervisedAnomalyDetectorService:
                 features = prepare_customer_features_from_df(
                     df_normal[df_normal["customer_id"].isin(sampled_customers)]
                 )
-                return self.kyc_scaler.transform(features)
+                background_data = self.kyc_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "transaction":
                 df = pd.read_csv(data_dir / "transaction_training_data.csv")
@@ -257,7 +315,12 @@ class SupervisedAnomalyDetectorService:
                     n=min(n_samples, len(df)), random_state=42
                 )
                 features = prepare_transaction_features_from_df(df_normal)
-                return self.transaction_scaler.transform(features)
+                background_data = self.transaction_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "combined":
                 df = pd.read_csv(data_dir / "kyc_business_training_data.csv")
@@ -265,7 +328,12 @@ class SupervisedAnomalyDetectorService:
                     n=min(n_samples, len(df)), random_state=42
                 )
                 features = prepare_combined_features_from_df(df_normal)
-                return self.combined_scaler.transform(features)
+                background_data = self.combined_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "customer":
                 df = pd.read_csv(data_dir / "transaction_training_data.csv")
@@ -277,7 +345,12 @@ class SupervisedAnomalyDetectorService:
                 features = prepare_customer_features_from_df(
                     df_normal[df_normal["customer_id"].isin(sampled_customers)]
                 )
-                return self.customer_scaler.transform(features)
+                background_data = self.customer_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
         except FileNotFoundError:
             logger.warning(
@@ -331,7 +404,19 @@ class SupervisedAnomalyDetectorService:
 
         is_anomaly = prediction == 1
         risk_level = self._calculate_risk_level(anomaly_probability)
-        explanation = self.kyc_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.kyc_explainer is not None:
+            explanation = self.kyc_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.kyc_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
 
         return is_anomaly, float(anomaly_probability), risk_level, explanation
 
@@ -356,7 +441,19 @@ class SupervisedAnomalyDetectorService:
 
         is_anomaly = prediction == 1
         risk_level = self._calculate_risk_level(anomaly_probability)
-        explanation = self.transaction_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.transaction_explainer is not None:
+            explanation = self.transaction_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.transaction_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
 
         return is_anomaly, float(anomaly_probability), risk_level, explanation
 
@@ -377,11 +474,6 @@ class SupervisedAnomalyDetectorService:
                 "Combined supervised model not available. Please train the combined model first."
             )
 
-        if self.combined_explainer is None:
-            raise ValueError(
-                "Combined explainer not initialized. Please ensure the service is properly initialized."
-            )
-
         data_dict = data.model_dump()
         df = pd.DataFrame([data_dict])
 
@@ -397,7 +489,19 @@ class SupervisedAnomalyDetectorService:
 
         is_anomaly = prediction == 1
         risk_level = self._calculate_risk_level(anomaly_probability)
-        explanation = self.combined_explainer.explain(scaled_features)
+        
+        # Get explanation if explainer is available
+        if self.combined_explainer is not None:
+            explanation = self.combined_explainer.explain(scaled_features)
+        else:
+            # Return basic explanation without SHAP
+            explanation = {
+                "top_contributing_features": {
+                    "Note": "SHAP explanations unavailable. Model loaded without explainers."
+                },
+                "feature_values": {name: float(val) for name, val in zip(self.combined_feature_names, scaled_features[0])},
+                "shap_values": {},
+            }
 
         return is_anomaly, float(anomaly_probability), risk_level, explanation
 

@@ -63,9 +63,9 @@ def prepare_transaction_features(df: pd.DataFrame) -> np.ndarray:
     features.append(np.clip(abs_balance_ratio, 0, 10))
     
     # Round amount detection (fraud indicator)
-    is_round_credit = (credit % 1000 == 0).astype(int).values
-    is_round_debit = (debit % 1000 == 0).astype(int).values
-    is_round_amount = ((credit % 1000 == 0) | (debit % 1000 == 0)).astype(int).values
+    is_round_credit = (credit % 1000 == 0).astype(int)
+    is_round_debit = (debit % 1000 == 0).astype(int)
+    is_round_amount = ((credit % 1000 == 0) | (debit % 1000 == 0)).astype(int)
     features.extend([is_round_credit, is_round_debit, is_round_amount])
     
     # Temporal features
@@ -125,7 +125,7 @@ def prepare_transaction_features(df: pd.DataFrame) -> np.ndarray:
     features.append(daily_velocity)
     
     # High velocity indicator (burst detection)
-    is_high_velocity = (daily_velocity > 5).astype(int).values
+    is_high_velocity = (daily_velocity > 5).astype(int)
     features.append(is_high_velocity)
     
     # Customer's average transaction amounts
@@ -149,8 +149,8 @@ def prepare_transaction_features(df: pd.DataFrame) -> np.ndarray:
     max_customer_debit = df["customer_id"].map(customer_max_debit).values
     
     # Is this transaction at or near customer's max?
-    is_max_credit = (credit == max_customer_credit).astype(int).values
-    is_max_debit = (debit == max_customer_debit).astype(int).values
+    is_max_credit = (credit == max_customer_credit).astype(int)
+    is_max_debit = (debit == max_customer_debit).astype(int)
     features.extend([is_max_credit, is_max_debit])
     
     # High amount indicator (transaction is in top 10% for customer)

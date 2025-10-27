@@ -4,6 +4,7 @@ from typing import Any, Dict, Tuple, List
 import joblib
 import numpy as np
 import pandas as pd
+from scipy.special import expit
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
@@ -232,9 +233,25 @@ class UnsupervisedAnomalyDetectorService:
     def _load_background_data(
         self, model_type: str, n_samples: int = 100
     ) -> np.ndarray:
-        """Load background data from training files for SHAP"""
+        """Load background data from training files for SHAP with caching"""
         from pathlib import Path
 
+        # Cache directory for background data
+        cache_dir = Path("data/models/unsupervised/background_cache")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Cache file path
+        cache_file = cache_dir / f"{model_type}_background_{n_samples}.npy"
+        
+        # Try to load from cache first
+        if cache_file.exists():
+            try:
+                logger.info(f"Loading cached background data for {model_type}...")
+                return np.load(cache_file)
+            except Exception as e:
+                logger.warning(f"Failed to load cached background data: {e}, regenerating...")
+
+        # If cache doesn't exist or failed, generate from raw data
         data_dir = Path("data/raw")
 
         try:
@@ -249,7 +266,12 @@ class UnsupervisedAnomalyDetectorService:
                 features = prepare_customer_features_from_df(
                     df_normal[df_normal["customer_id"].isin(sampled_customers)]
                 )
-                return self.kyc_scaler.transform(features)
+                background_data = self.kyc_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "transaction":
                 df = pd.read_csv(data_dir / "transaction_training_data.csv")
@@ -257,7 +279,12 @@ class UnsupervisedAnomalyDetectorService:
                     n=min(n_samples, len(df)), random_state=42
                 )
                 features = prepare_transaction_features_from_df(df_normal)
-                return self.transaction_scaler.transform(features)
+                background_data = self.transaction_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "combined":
                 df = pd.read_csv(data_dir / "kyc_business_training_data.csv")
@@ -265,7 +292,12 @@ class UnsupervisedAnomalyDetectorService:
                     n=min(n_samples, len(df)), random_state=42
                 )
                 features = prepare_combined_features_from_df(df_normal)
-                return self.combined_scaler.transform(features)
+                background_data = self.combined_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
             elif model_type == "customer":
                 df = pd.read_csv(data_dir / "transaction_training_data.csv")
@@ -277,7 +309,12 @@ class UnsupervisedAnomalyDetectorService:
                 features = prepare_customer_features_from_df(
                     df_normal[df_normal["customer_id"].isin(sampled_customers)]
                 )
-                return self.customer_scaler.transform(features)
+                background_data = self.customer_scaler.transform(features)
+                
+                # Cache the result
+                np.save(cache_file, background_data)
+                logger.info(f"Cached background data for {model_type}")
+                return background_data
 
         except FileNotFoundError:
             logger.warning(
@@ -341,7 +378,9 @@ class UnsupervisedAnomalyDetectorService:
         scaled_features = self.kyc_scaler.transform(features)
 
         prediction = self.kyc_model.predict(scaled_features)[0]
-        score = self.kyc_model.score_samples(scaled_features)[0]
+        raw_score = self.kyc_model.score_samples(scaled_features)[0]
+        # Normalize score to 0-1 range
+        score = self._normalize_score(raw_score)
 
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
@@ -369,8 +408,9 @@ class UnsupervisedAnomalyDetectorService:
         scaled_features = self.transaction_scaler.transform(features)
 
         prediction = self.transaction_model.predict(scaled_features)[0]
-        # Use raw Isolation Forest score (negative values are anomalous)
-        score = self.transaction_model.score_samples(scaled_features)[0]
+        raw_score = self.transaction_model.score_samples(scaled_features)[0]
+        # Normalize score to 0-1 range
+        score = self._normalize_score(raw_score)
 
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
@@ -426,7 +466,9 @@ class UnsupervisedAnomalyDetectorService:
         
         # Make predictions
         prediction = self.combined_model.predict(scaled_features)[0]
-        score = self.combined_model.score_samples(scaled_features)[0]
+        raw_score = self.combined_model.score_samples(scaled_features)[0]
+        # Normalize score to 0-1 range
+        score = self._normalize_score(raw_score)
         
         is_anomaly = prediction == -1
         risk_level = self._calculate_risk_level(score)
@@ -446,11 +488,34 @@ class UnsupervisedAnomalyDetectorService:
         
         return is_anomaly, float(score), risk_level, explanation
 
+    def _normalize_score(self, raw_score: float) -> float:
+        """
+        Normalize Isolation Forest score to 0-1 range
+        
+        Isolation Forest returns scores where:
+        - Negative values indicate anomalies
+        - Positive values indicate normal behavior
+        
+        We normalize using sigmoid: 1 / (1 + exp(score))
+        This maps negative scores (anomalies) to values closer to 1
+        and positive scores (normal) to values closer to 0
+        """
+        # Apply sigmoid to normalize to 0-1
+        normalized = expit(raw_score)
+        
+        # Invert so that negative scores (anomalies) map to high values
+        # and positive scores (normal) map to low values
+        return 1.0 - normalized
+
     def _calculate_risk_level(self, score: float) -> RiskLevel:
-        """Calculate risk level based on Isolation Forest score (negative = anomalous)"""
-        if score < settings.UNSUPERVISED_HIGH_RISK_THRESHOLD:
+        """Calculate risk level based on normalized score (0-1 range, higher = more anomalous)"""
+        # Convert threshold from raw score to normalized score
+        high_threshold_normalized = self._normalize_score(settings.UNSUPERVISED_HIGH_RISK_THRESHOLD)
+        medium_threshold_normalized = self._normalize_score(settings.UNSUPERVISED_MEDIUM_RISK_THRESHOLD)
+        
+        if score >= high_threshold_normalized:
             return RiskLevel.HIGH
-        elif score < settings.UNSUPERVISED_MEDIUM_RISK_THRESHOLD:
+        elif score >= medium_threshold_normalized:
             return RiskLevel.MEDIUM
         else:
             return RiskLevel.LOW
