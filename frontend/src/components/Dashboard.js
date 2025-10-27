@@ -121,7 +121,7 @@ const Dashboard = ({ onShowSnackbar }) => {
           variant='h4'
           sx={{ fontWeight: "bold", color: "#424242", mb: 1 }}
         >
-          Fraud Detection Dashboard
+          Dashboard
         </Typography>
         <Typography variant='body1' color='text.secondary'>
           Overview of fraud detection system performance and flagged items
