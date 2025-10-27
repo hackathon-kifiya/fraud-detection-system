@@ -1,16 +1,19 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:8080";
+  process.env.REACT_APP_BACKEND_URL || "http://192.168.8.41:8080";
 
 const RULE_ENGINE_URL =
-  process.env.REACT_APP_RULE_ENGINE_URL || "http://localhost:8081";
+  process.env.REACT_APP_RULE_ENGINE_URL || "http://192.168.8.41:8081";
 
 const DECISION_SERVICE_URL =
-  process.env.REACT_APP_DECISION_SERVICE_URL || "http://localhost:5003";
+  process.env.REACT_APP_DECISION_SERVICE_URL || "http://192.168.8.41:5003";
 
 const DATA_MANAGEMENT_SERVICE_URL =
-  process.env.REACT_APP_DATA_MANAGEMENT_SERVICE_URL || "http://localhost:5004";
+  process.env.REACT_APP_DATA_MANAGEMENT_SERVICE_URL || "http://192.168.8.41:5004";
+
+const ANOMALY_DETECTION_SERVICE_URL =
+  process.env.REACT_APP_ANOMALY_DETECTION_SERVICE_URL || "http://192.168.8.41:5001";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -41,6 +44,15 @@ const dataManagementServiceApi = axios.create({
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
+  },
+});
+
+const anomalyDetectionServiceApi = axios.create({
+  baseURL: ANOMALY_DETECTION_SERVICE_URL,
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": "your-secret-api-key-here", // This should match the anomaly detection service API key
   },
 });
 
@@ -359,14 +371,24 @@ export const riskAggregationAPI = {
   getRiskHistory: (params) => api.get("/api/risk/history", { params }),
 };
 
-// Anomaly Detection endpoints
+// Anomaly Detection endpoints (connecting to anomaly-detection service)
 export const anomalyDetectionAPI = {
-  // Anomaly detection
+  // Unsupervised endpoints
+  checkKYC: (data) => anomalyDetectionServiceApi.post("/api/v1/unsupervised/kyc/check", data),
+  checkTransaction: (data) => anomalyDetectionServiceApi.post("/api/v1/unsupervised/transaction/check", data),
+  checkMerged: (data) => anomalyDetectionServiceApi.post("/api/v1/unsupervised/merged/check", data),
+  
+  // Supervised endpoints
+  checkSupervisedTransaction: (data) => anomalyDetectionServiceApi.post("/api/v1/supervised/transaction/check", data),
+  checkSupervisedMerged: (data) => anomalyDetectionServiceApi.post("/api/v1/supervised/merged/check", data),
+  
+  // Service health
+  getHealth: () => anomalyDetectionServiceApi.get("/health"),
+  
+  // Legacy endpoints (for backwards compatibility)
   detectAnomalies: (data) => api.post("/api/anomaly/detect", data),
   getAnomalyStats: () => api.get("/api/anomaly/stats"),
   getAnomalyHistory: (params) => api.get("/api/anomaly/history", { params }),
-  
-  // Model management
   getModelStatus: () => api.get("/api/anomaly/model/status"),
   retrainModel: (data) => api.post("/api/anomaly/model/retrain", data),
   getModelMetrics: () => api.get("/api/anomaly/model/metrics"),
