@@ -202,14 +202,41 @@ docker-compose up -d
 
 ### 2. Access Services
 ```
-Frontend:               http://localhost:3000
-Backend API:            http://localhost:8080
-Rule Engine:            http://localhost:8081
-Data Management:        http://localhost:5004
-Decision Service:       http://localhost:5003
-Anomaly Detection:      http://localhost:5001
-Prediction Engine:      http://localhost:5002
-PostgreSQL Database:    localhost:5433
+Swagger Documentation Links
+1. Backend Service (Go)
+Port: 8080
+Swagger UI: http://localhost:8080/swagger/index.html
+OpenAPI JSON: http://localhost:8080/swagger/doc.json
+Description: Fraud Detection System API
+2. Anomaly Detection Service (Python/FastAPI)
+Port: 5001 (mapped to 8000 internally)
+Swagger UI: http://localhost:5001/docs
+ReDoc: http://localhost:5001/redoc
+OpenAPI JSON: http://localhost:5001/api/v1/openapi.json
+Description: KYC & Transaction Anomaly Detection API with Isolation Forest and Random Forest models
+3. Decision Service (Python/FastAPI)
+Port: 5003
+Swagger UI: http://localhost:5003/docs
+ReDoc: http://localhost:5003/redoc
+OpenAPI JSON: http://localhost:5003/openapi.json
+Description: Configurable decision service aggregating scores from rule engine, anomaly detection, and predictive engine
+4. Data Management Service (Python/FastAPI)
+Port: 5004
+Swagger UI: http://localhost:5004/docs
+ReDoc: http://localhost:5004/redoc
+OpenAPI JSON: http://localhost:5004/openapi.json
+Description: Single source of truth for data type definitions
+5. Rule Engine Service (Java/Spring Boot)
+Port: 8081
+Swagger UI: http://localhost:8081/swagger-ui.html
+OpenAPI JSON: http://localhost:8081/v3/api-docs
+Description: Drools-based fraud detection rules engine
+6. Risk Aggregator Service (Python/FastAPI)
+Port: 8003 (configured in risk-aggregator, may vary)
+Swagger UI: http://localhost:8003/api/v1/docs
+ReDoc: http://localhost:8003/api/v1/redoc
+OpenAPI JSON: http://localhost:8003/api/v1/openapi.json
+Description: Risk Aggregator Service combining and aggregating risk signals
 ```
 
 ### 3. Default Login
